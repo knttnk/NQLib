@@ -804,7 +804,7 @@ class IdealSystem():
             sum_CAB = sum_CAB + abs(C_bar @ A_bar_k @ B_bar)
             E_current = norm(sum_CAB) * Q.delta
 
-            if k > 0:
+            if k > 1:
                 if abs(E_current-E_past)/E_current < 1e-8:
                     break
             k = k + 1

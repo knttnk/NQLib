@@ -774,7 +774,7 @@ class IdealSystem():
         A_tilde = self.A + self.B2@self.C2  # convert to closed loop (only G)
 
         A_bar = block([
-            [A_tilde,                    self.B2@Q.C],
+            [A_tilde,             self.B2@Q.C],
             [zeros((Q.A.shape[0], A_tilde.shape[0])), Q.A+Q.B@Q.C],
         ])
         B_bar = block([
@@ -797,14 +797,21 @@ class IdealSystem():
         sum_CAB = zeros((self.C1.shape[0], self.B2.shape[1]))
         E_current = 0
         if steptime is None:
-            steptime = inf
-        while k < steptime:
+            k_max = inf
+
+            # smallest k that satisfies
+            # `eig_max(A_bar)**k / eig_max(A_bar) < 1e-8`
+            k_min = 1 - 8 / _np.log10(eig_max(A_bar))
+        else:
+            k_max = steptime
+            k_min = 1
+        while k <= k_max:
             E_past = E_current
 
             sum_CAB = sum_CAB + abs(C_bar @ A_bar_k @ B_bar)
             E_current = norm(sum_CAB) * Q.delta
 
-            if k > 1:
+            if k >= k_min:
                 if abs(E_current-E_past)/E_current < 1e-8:
                     break
             k = k + 1

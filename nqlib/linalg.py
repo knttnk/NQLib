@@ -3,6 +3,8 @@ import scipy.sparse.linalg
 
 np.set_printoptions(precision=5, suppress=True)
 
+array = np.array
+
 
 def matrix(M) -> np.ndarray:
     return np.array(M, ndmin=2)

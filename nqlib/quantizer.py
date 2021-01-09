@@ -8,6 +8,9 @@ import control as _ctrl
 import cvxpy
 import numpy as _np
 from numpy import inf
+from scipy.optimize import minimize as _minimize
+from scipy.optimize import differential_evolution as _differential_evolution
+
 
 from .linalg import block, eye, kron, matrix, norm, ones, pinv, zeros, eig_max, mpow
 
@@ -1040,6 +1043,276 @@ class DynamicQuantizer():
                                                      dim=dim,
                                                      verbose=verbose,
                                                      solver=solver)
+
+    @staticmethod
+    def gradient_based(system: "IdealSystem",
+                       *,
+                       q: StaticQuantizer,
+                       dim: int,
+                       T: int = None,  # TODO: これより下を反映
+                       gain_wv: float = inf,
+                       verbose: bool = False,
+                       method: str = "") -> Tuple["DynamicQuantizer", float]:  # TODO: method のデフォルトを決める
+        """
+        A shortened form of `DynamicQuantizer.find_the_optimal_for()`.
+
+        Calculates the stable and optimal dynamic quantizer `Q` for `system`.
+        Returns `(Q, E)`. `E` is the estimation of E(Q)[1]_,[2]_,[3]_.
+
+        Parameters
+        ----------
+        system : IdealSystem
+            Must be stable and SISO.
+        q : StaticQuantizer
+            Returned dynamic quantizer contains this static quantizer.
+            `q.delta` is important to estimate E(Q).
+        dim : int
+            Dimension of `Q`. Must be greater than `0`.
+        T : int, None or numpy.inf, optional
+            Estimation time. Must be greater than `0`.
+            (The default is `None`, which means infinity).
+        gain_wv : float, optional
+            Upper limit of gain w->v . Must be greater than `0`.
+            (The default is `numpy.inf`).
+        verbose : bool, optional
+            Whether to print the details.
+            (The default is `False`).
+        method : str, optional  TODO: 削除
+            Specifies which method should be used in
+            `scipy.optimize.minimize()`.
+            (The default is `""`, which implies that this function doesn't
+            specify the method).
+
+        Returns
+        -------
+        (Q, E) : Tuple[DynamicQuantizer, float]
+            `Q` is the stable and optimal dynamic quantizer for `system`.
+            `E` is estimation of E(Q).
+
+        Raises
+        ------
+        ValueError
+            If `system` is unstable.
+
+        References
+        ----------
+        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
+           quantizers for discrete-valued input control;IEEE Transactions
+           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
+        .. [2]  Y. Minami, S. Azuma and T. Sugie:  An optimal dynamic quantizer
+           for feedback control with discrete-valued signal constraints;2007
+           46th IEEEConference on Decision and Control, pp.  2259–2264, IEEE
+           (2007)
+        .. [3] 南，加嶋：システムの直列分解に基づく動的量子化器設計；計測自動制御学会
+           論文集，Vol. 52, pp. 46–51(2016)
+        """
+        # if T is None:
+        #     # TODO: support infinity evaluation time
+        #     return None, inf
+        if not isinstance(dim, int):
+            raise TypeError("`dim` must be an instance of `int`.")
+        elif dim < 1:
+            raise ValueError("`dim` must be greater than `0`.")
+        # TODO: siso のチェック
+
+        # functions to calculate E from
+        # x = [an, ..., a1, cn, ..., c1]  (n = dim)
+        def a(x):
+            """
+            a = [an, ..., a1]
+            """
+            return x[:dim]
+
+        def c(x):
+            """
+            c = [cn, ..., c1]
+            """
+            return x[dim:]
+
+        def _Q(x):
+            # controllable canonical form
+            _A = block([
+                [zeros((dim-1, 1)), eye(dim-1)],
+                [-a(x)],
+            ])
+            _B = block([
+                [zeros((dim-1, 1))],
+                [1],
+            ])
+            _C = c(x)
+            return DynamicQuantizer(
+                A=_A,
+                B=_B,
+                C=_C,
+                q=q,
+            )
+
+        def E_obj(x):
+            return system.E(_Q(x))
+
+        # optimize
+        if verbose:
+            print("Designing a quantizer with gradient-based optimization.")
+            print(f"The optimization method is '{method}'.")
+            print("### Message from `scipy.optimize.minimize()`. ###")
+        result = _minimize(E_obj,
+                           x0=2 * ones(2*dim)[0],
+                           tol=1e-10,
+                           options={
+                               "disp": verbose,
+                           },
+                           method="SLSQP")
+        if verbose:
+            print(result.message)
+            print("### End of message from `scipy.optimize.minimize()`. ###")
+
+        if result.success:
+            Q = _Q(result.x)
+            E = system.E(Q)
+            if verbose:
+                print("Optimization succeeded.")
+                print(f"E = {E}")
+        else:
+            Q = None
+            E = inf
+            if verbose:
+                print("Optimization failed.")
+
+        return Q, E
+
+    @staticmethod
+    def DE(system: "IdealSystem",
+            *,
+            q: StaticQuantizer,
+            dim: int,
+            T: int = None,  # TODO: これより下を反映
+            gain_wv: float = inf,
+            verbose: bool = False,
+            method: str = "") -> Tuple["DynamicQuantizer", float]:  # TODO: method のデフォルトを決める
+        """
+        A shortened form of `DynamicQuantizer.find_the_optimal_for()`.
+
+        Calculates the stable and optimal dynamic quantizer `Q` for `system`.
+        Returns `(Q, E)`. `E` is the estimation of E(Q)[1]_,[2]_,[3]_.
+
+        Parameters
+        ----------
+        system : IdealSystem
+            Must be stable and SISO.
+        q : StaticQuantizer
+            Returned dynamic quantizer contains this static quantizer.
+            `q.delta` is important to estimate E(Q).
+        dim : int
+            Dimension of `Q`. Must be greater than `0`.
+        T : int, None or numpy.inf, optional
+            Estimation time. Must be greater than `0`.
+            (The default is `None`, which means infinity).
+        gain_wv : float, optional
+            Upper limit of gain w->v . Must be greater than `0`.
+            (The default is `numpy.inf`).
+        verbose : bool, optional
+            Whether to print the details.
+            (The default is `False`).
+        method : str, optional  TODO: 削除
+            Specifies which method should be used in
+            `scipy.optimize.minimize()`.
+            (The default is `""`, which implies that this function doesn't
+            specify the method).
+
+        Returns
+        -------
+        (Q, E) : Tuple[DynamicQuantizer, float]
+            `Q` is the stable and optimal dynamic quantizer for `system`.
+            `E` is estimation of E(Q).
+
+        Raises
+        ------
+        ValueError
+            If `system` is unstable.
+
+        References
+        ----------
+        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
+           quantizers for discrete-valued input control;IEEE Transactions
+           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
+        .. [2]  Y. Minami, S. Azuma and T. Sugie:  An optimal dynamic quantizer
+           for feedback control with discrete-valued signal constraints;2007
+           46th IEEEConference on Decision and Control, pp.  2259–2264, IEEE
+           (2007)
+        .. [3] 南，加嶋：システムの直列分解に基づく動的量子化器設計；計測自動制御学会
+           論文集，Vol. 52, pp. 46–51(2016)
+        """
+        # if T is None:
+        #     # TODO: support infinity evaluation time
+        #     return None, inf
+        if not isinstance(dim, int):
+            raise TypeError("`dim` must be an instance of `int`.")
+        elif dim < 1:
+            raise ValueError("`dim` must be greater than `0`.")
+        # TODO: siso のチェック
+
+        # functions to calculate E from
+        # x = [an, ..., a1, cn, ..., c1]  (n = dim)
+        def a(x):
+            """
+            a = [an, ..., a1]
+            """
+            return x[:dim]
+
+        def c(x):
+            """
+            c = [cn, ..., c1]
+            """
+            return x[dim:]
+
+        def _Q(x):
+            # controllable canonical form
+            _A = block([
+                [zeros((dim-1, 1)), eye(dim-1)],
+                [-a(x)],
+            ])
+            _B = block([
+                [zeros((dim-1, 1))],
+                [1],
+            ])
+            _C = c(x)
+            return DynamicQuantizer(
+                A=_A,
+                B=_B,
+                C=_C,
+                q=q,
+            )
+
+        def E_obj(x):
+            return system.E(_Q(x))
+
+        # optimize
+        if verbose:
+            print("Designing a quantizer with differential evolution.")
+            print(f"The optimization method is '{method}'.")
+            print("### Message from `scipy.optimize.differential_evolution()`. ###")
+        result = _differential_evolution(E_obj,
+                                         bounds=[(-10, 10) for i in range(dim * 2)],  # TODO: よりせまく
+                                         tol=1e-10,
+                                         disp=verbose,
+                                         )
+        if verbose:
+            print(result.message)
+            print("### End of message from `scipy.optimize.differential_evolution()`. ###")
+
+        if result.success:
+            Q = _Q(result.x)
+            E = system.E(Q)
+            if verbose:
+                print("Optimization succeeded.")
+                print(f"E = {E}")
+        else:
+            Q = None
+            E = inf
+            if verbose:
+                print("Optimization failed.")
+
+        return Q, E
 
     def quantize(self, u) -> _np.ndarray:
         """

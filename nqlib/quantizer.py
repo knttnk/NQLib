@@ -8,11 +8,11 @@ import control as _ctrl
 import cvxpy
 import numpy as _np
 from numpy import inf
+from scipy.special import comb as _comb
 from scipy.optimize import minimize as _minimize
 from scipy.optimize import differential_evolution as _differential_evolution
 
-
-from .linalg import block, eye, kron, matrix, norm, ones, pinv, zeros, eig_max, mpow
+from .linalg import block, eye, kron, matrix, norm, ones, pinv, zeros, eig_max, mpow  # TODO: mpow はいらん
 
 _ctrl.use_numpy_matrix(False)
 __all__ = [
@@ -824,6 +824,55 @@ class DynamicQuantizer():
 
         return ret
 
+    def _objective_function(self,
+                            system: "IdealSystem",
+                            *,
+                            T: int = None,  # TODO: これより下を反映
+                            gain_wv: float = inf) -> float:
+        """
+        Used in numerical optimization.
+
+        Parameters
+        ----------
+        system : IdealSystem
+            Must be stable and SISO.
+        T : int, None or numpy.inf, optional
+            Estimation time. Must be greater than `0`.
+            (The default is `None`, which means infinity).
+        gain_wv : float, optional
+            Upper limit of gain w->v . Must be greater than `0`.
+            (The default is `numpy.inf`).
+
+        Returns
+        -------
+        value : float
+
+        References
+        ----------
+        .. [1] Y. Minami: Design of model following control systems with
+           discrete-valued signal constraints;International Journal of Control,
+           Automationand Systems, Vol. 14, pp. 331–339 (2016)
+        """
+        # if T is None:
+        #     # TODO: support infinity evaluation time
+        #     return None, inf
+        # TODO: siso のチェック
+
+        # Values representing the stability or gain_wv.y
+        # if max(constraint_values) < 0, this quantizer satisfies the
+        # constraints.
+        constraint_values = [
+            eig_max(self.A+self.B@self.C) - 1,
+        ]
+        if not _np.isposinf(gain_wv):
+            constraint_values.append(self.gain_wv(T) - gain_wv)
+
+        max_v = max(constraint_values)
+        if max_v < 0:
+            return - 1.1 ** (- system.E(self))
+        else:
+            return max_v
+
     @property
     def is_stable(self) -> bool:
         """
@@ -844,6 +893,27 @@ class DynamicQuantizer():
             return False
         else:
             return True
+
+    @property
+    def minreal(self) -> "DynamicQuantizer":
+        """
+        Minimal realization of this quantizer.
+
+        Returns
+        -------
+        Q : DynamicQuantizer
+        """
+        minreal_ss = _ctrl.ss(
+            self.A,
+            self.B,
+            self.C,
+            self.C @ self.B * 0,
+            True,
+        ).minreal()
+        return DynamicQuantizer(minreal_ss.A,
+                                minreal_ss.B,
+                                minreal_ss.C,
+                                self.q)
 
     @staticmethod
     def find_the_optimal_for(system: "IdealSystem",
@@ -906,6 +976,7 @@ class DynamicQuantizer():
         .. [3] 南，加嶋：システムの直列分解に基づく動的量子化器設計；計測自動制御学会
            論文集，Vol. 52, pp. 46–51(2016)
         """
+        # TODO: 最小実現する
         # check system
         if system.__class__.__name__ != "IdealSystem":
             raise TypeError(
@@ -1052,11 +1123,9 @@ class DynamicQuantizer():
                        T: int = None,  # TODO: これより下を反映
                        gain_wv: float = inf,
                        verbose: bool = False,
-                       method: str = "") -> Tuple["DynamicQuantizer", float]:  # TODO: method のデフォルトを決める
+                       method: str = "SLSQP") -> Tuple["DynamicQuantizer", float]:
         """
-        A shortened form of `DynamicQuantizer.find_the_optimal_for()`.
-
-        Calculates the stable and optimal dynamic quantizer `Q` for `system`.
+        Finds the stable and optimal dynamic quantizer `Q` for `system`.
         Returns `(Q, E)`. `E` is the estimation of E(Q)[1]_,[2]_,[3]_.
 
         Parameters
@@ -1105,7 +1174,7 @@ class DynamicQuantizer():
            (2007)
         .. [3] 南，加嶋：システムの直列分解に基づく動的量子化器設計；計測自動制御学会
            論文集，Vol. 52, pp. 46–51(2016)
-        """
+        """  # TODO: ドキュメント更新
         # if T is None:
         #     # TODO: support infinity evaluation time
         #     return None, inf
@@ -1147,26 +1216,30 @@ class DynamicQuantizer():
                 q=q,
             )
 
-        def E_obj(x):
-            return system.E(_Q(x))
+        def obj(x):
+            return _Q(x)._objective_function(system,
+                                             T=T,
+                                             gain_wv=gain_wv)
 
         # optimize
         if verbose:
             print("Designing a quantizer with gradient-based optimization.")
             print(f"The optimization method is '{method}'.")
             print("### Message from `scipy.optimize.minimize()`. ###")
-        result = _minimize(E_obj,
-                           x0=2 * ones(2*dim)[0],
-                           tol=1e-10,
+        result = _minimize(obj,
+                           x0=zeros(2*dim)[0],
+                           tol=0,
                            options={
                                "disp": verbose,
+                               'maxiter': 10000,
+                               'ftol': 1e-10,
                            },
-                           method="SLSQP")
+                           method=method)
         if verbose:
             print(result.message)
             print("### End of message from `scipy.optimize.minimize()`. ###")
 
-        if result.success:
+        if result.success and obj(result.x) <= 0:
             Q = _Q(result.x)
             E = system.E(Q)
             if verbose:
@@ -1187,8 +1260,7 @@ class DynamicQuantizer():
             dim: int,
             T: int = None,  # TODO: これより下を反映
             gain_wv: float = inf,
-            verbose: bool = False,
-            method: str = "") -> Tuple["DynamicQuantizer", float]:  # TODO: method のデフォルトを決める
+            verbose: bool = False) -> Tuple["DynamicQuantizer", float]:  # TODO: method のデフォルトを決める
         """
         A shortened form of `DynamicQuantizer.find_the_optimal_for()`.
 
@@ -1213,11 +1285,6 @@ class DynamicQuantizer():
         verbose : bool, optional
             Whether to print the details.
             (The default is `False`).
-        method : str, optional  TODO: 削除
-            Specifies which method should be used in
-            `scipy.optimize.minimize()`.
-            (The default is `""`, which implies that this function doesn't
-            specify the method).
 
         Returns
         -------
@@ -1283,19 +1350,36 @@ class DynamicQuantizer():
                 q=q,
             )
 
-        def E_obj(x):
-            return system.E(_Q(x))
+        def obj(x):
+            return _Q(x)._objective_function(system,
+                                             T=T,
+                                             gain_wv=gain_wv)
+
+        def comb(k):
+            return _comb(dim, k, exact=True, repetition=False)
 
         # optimize
+        bounds = [matrix([-1, 1])[0] * comb(i) for i in range(dim)] + [matrix([-2, 2])[0] * comb(dim // 2) for i in range(dim)]
+        print(bounds)
         if verbose:
             print("Designing a quantizer with differential evolution.")
-            print(f"The optimization method is '{method}'.")
             print("### Message from `scipy.optimize.differential_evolution()`. ###")
-        result = _differential_evolution(E_obj,
-                                         bounds=[(-10, 10) for i in range(dim * 2)],  # TODO: よりせまく
-                                         tol=1e-10,
-                                         disp=verbose,
-                                         )
+        result = _differential_evolution(
+            obj,
+            bounds=bounds,  # TODO: よりせまく
+            atol=1e-6,  # absolute
+            tol=0,  # relative
+            maxiter=1000,
+            strategy='rand2exp',
+            disp=verbose,
+        )
+        # - 'currenttobest1exp'  いいかも
+        # - 'rand2exp'  わるくはない
+        # - 'currenttobest1bin'  いいかも 答えが求まりにくい？
+        # - 'best2bin'  わるくない
+        # - 'rand2bin'  わるくない
+        # - 'rand1bin'  精度がいい？
+
         if verbose:
             print(result.message)
             print("### End of message from `scipy.optimize.differential_evolution()`. ###")

@@ -801,7 +801,11 @@ class IdealSystem():
 
             # smallest k that satisfies
             # `eig_max(A_bar)**k / eig_max(A_bar) < 1e-8`
-            k_min = 1 - 8 / _np.log10(eig_max(A_bar))
+            eig_max_ = eig_max(A_bar)
+            if eig_max_ <= 1e-8:
+                k_min = 1
+            else:
+                k_min = 1 - 8 / _np.log10(eig_max_)
         else:
             k_max = steptime
             k_min = 1

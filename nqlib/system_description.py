@@ -804,6 +804,8 @@ class IdealSystem():
             eig_max_ = eig_max(A_bar)
             if eig_max_ <= 1e-8:
                 k_min = 1
+            elif 0.9999 <= eig_max_:  # TODO: なおす
+                k_min = 1000
             else:
                 k_min = 1 - 8 / _np.log10(eig_max_)
         else:

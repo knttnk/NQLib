@@ -316,9 +316,9 @@ class IdealSystem():
         length = r.shape[1]
         k = matrix(range(0, length))
 
-        z = zeros((1, length))
-        u = copy.deepcopy(z)
-        v = copy.deepcopy(z)
+        z = zeros((self.l, length))
+        u = zeros((self.m, length))
+        v = copy.deepcopy(u)
         x = zeros((len(x_0), length))
         xi = zeros((len(quantizer.A), length))
         x[:, 0:1] = matrix(x_0)
@@ -352,8 +352,8 @@ class IdealSystem():
         length = r.shape[1]
         k = matrix(range(0, length))
 
-        z = zeros((1, length))
-        u = copy.deepcopy(z)
+        z = zeros((self.l, length))
+        u = zeros((self.m, length))
         x = zeros((len(x_0), length))
         x[:, 0:1] = matrix(x_0)
 

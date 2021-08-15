@@ -869,7 +869,7 @@ class DynamicQuantizer():
 
         max_v = max(constraint_values)
         if max_v < 0:
-            return - 1.1 ** (- system.E(self))
+            return - 1.1 ** (- system.E(self))  # TODO: selfとsystemが不安定に近いとき，最適化初期で計算時間がかかりすぎる
         else:
             return max_v
 

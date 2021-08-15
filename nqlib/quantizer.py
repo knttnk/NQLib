@@ -1360,7 +1360,6 @@ class DynamicQuantizer():
 
         # optimize
         bounds = [matrix([-1, 1])[0] * comb(i) for i in range(dim)] + [matrix([-2, 2])[0] * comb(dim // 2) for i in range(dim)]
-        print(bounds)
         if verbose:
             print("Designing a quantizer with differential evolution.")
             print("### Message from `scipy.optimize.differential_evolution()`. ###")

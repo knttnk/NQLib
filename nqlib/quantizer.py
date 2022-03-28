@@ -1,8 +1,10 @@
+from distutils.log import warn
 import math
 import time
 from enum import Enum as _Enum
 from enum import auto as _auto
 from typing import Callable, Tuple, Union
+import warnings
 
 import control as _ctrl
 import cvxpy
@@ -12,8 +14,10 @@ from scipy.special import comb as _comb
 from scipy.optimize import minimize as _minimize
 from scipy.optimize import differential_evolution as _differential_evolution
 
-from .linalg import block, eye, kron, matrix, norm, ones, pinv, zeros, eig_max, mpow  # TODO: mpow はいらん
+from .linalg import block, eye, kron, matrix, norm, ones, pinv, zeros, eig_max, mpow
 
+
+# TODO: 線形計画で解くやつの参考文献を書き忘れている
 _ctrl.use_numpy_matrix(False)
 __all__ = [
     'StaticQuantizer',
@@ -139,7 +143,7 @@ class StaticQuantizer():
 
         # function to quantize
         def q(u):
-            return ((u + d/2) // d) * d
+            return ((u + d / 2) // d) * d
 
         # limit the values
         if bit is None:
@@ -148,15 +152,15 @@ class StaticQuantizer():
             def function(u):
                 return _np.clip(
                     q(u),
-                    a_min=-(2**(bit-1) - 1) * d,
-                    a_max=2**(bit-1) * d,
+                    a_min=-(2**(bit - 1) - 1) * d,
+                    a_max=2**(bit - 1) * d,
                 )
         else:
             raise TypeError('`bit` must be an natural number or `None`.')
 
         return StaticQuantizer(
             function=function,
-            delta=d/2,
+            delta=d / 2,
             error_on_excess=error_on_excess,
         )
 
@@ -192,14 +196,14 @@ class StaticQuantizer():
 
         # function to quantize
         def q(u):
-            return (u // d + 1/2) * d
+            return (u // d + 1 / 2) * d
 
         # limit the values
         if bit is None:
             function = q
         elif isinstance(bit, int) and bit > 0:
             def function(u):
-                a_max = (2**(bit-1) - 1/2) * d
+                a_max = (2**(bit - 1) - 1 / 2) * d
                 return _np.clip(
                     q(u),
                     a_min=-a_max,
@@ -210,338 +214,9 @@ class StaticQuantizer():
 
         return StaticQuantizer(
             function=function,
-            delta=d/2,
+            delta=d / 2,
             error_on_excess=error_on_excess,
         )
-
-
-class IsDone(_Enum):
-    """
-    Inherits from `enum.Enum`.
-    This class represents current phase of
-    `DynamicQuantizer.find_the_optimal_for()`.
-    """
-    NOT_YET = False
-    ANALYTICALLY = 1
-    NUMERICALLY = 2
-
-    def __bool__(self) -> bool:
-        if self == IsDone.NOT_YET:
-            return False
-        else:
-            return True
-
-
-def _lp(system: "IdealSystem",
-        T: int,  # odd number
-        gain_wv: float,
-        solver: str) -> _np.ndarray:
-    """
-    Composes and solves linear problem to find good quantizer.
-
-    Parameters
-    ----------
-    system : IdealSystem
-    T : int
-        Must be an odd number. This function doesn't check.
-    solver : str
-        Solver name to solve LP.
-
-    Returns
-    -------
-    _np.ndarray
-        Solution of LP.
-
-    Raises
-    ------
-    cvxpy.SolverError
-        if no solver named `solver` found.
-    """
-    if solver == '':
-        solver = None
-
-    m = system.m
-    p = system.l
-
-    A_tilde = system.A + system.B2 @ system.C2
-
-    if gain_wv == inf:
-        f = zeros((1 + m**2*T + p*m*(T-1), 1))
-    else:
-        f = zeros((1 + 2*m**2*T + p*m*(T-1), 1))
-    f[0, 0] = 1
-
-    # compose Phi
-    Phi = zeros((m*p*(T-1), m*m*T))
-    for i in range(1, T):
-        Phi_dash = kron(
-            system.C1 @ mpow(A_tilde, i-1) @ system.B2, eye(m)
-        )
-        for j in range(i, T):   # TODO: Any easier way?
-            Phi[(j-1)*m*p: j*m*p,  (j-i)*m*m: (j-i+1)*m*m] = Phi_dash
-
-    # making 'matrix -> vector' transposer
-    eye_sumE = kron(
-        ones((1, m*(T-1))), eye(p)
-    )
-    eye_sumH = kron(
-        ones((1, m*T)), eye(m)
-    )
-
-    # finalize
-    if gain_wv == inf:
-        A = block([
-            [-ones((p, 1)),          zeros((p, m*m*T)),  eye_sumE],
-            [zeros((p*m*(T-1), 1)),  Phi,                   -eye(m*p*(T-1))],
-            [zeros((p*m*(T-1), 1)), -Phi,                   -eye(m*p*(T-1))],
-        ])
-    else:
-        A = block([
-            [-ones((p, 1)),          zeros((p, m*m*T)),  zeros((p, m*m*T)),          eye_sumE],
-            [zeros((p*m*(T-1), 1)),  Phi,                    zeros((p*m*(T-1), m*m*T)), -eye(m*p*(T-1))],
-            [zeros((p*m*(T-1), 1)), -Phi,                    zeros((p*m*(T-1), m*m*T)), -eye(m*p*(T-1))],
-            [zeros((m, 1)),          zeros((m, m*m*T)),  eye_sumH,                       zeros((m, m*p*(T-1)))],
-            [zeros((m*m*T, 1)),      eye(m*m*T),        -eye(m*m*T),                 zeros((m*m*T, m*p*(T-1)))],
-            [zeros((m*m*T, 1)),     -eye(m*m*T),        -eye(m*m*T),                 zeros((m*m*T, m*p*(T-1)))],
-        ])
-
-    # making C A^k B ,changing matrix to vector
-    CAB = zeros(((T-1)*p, m))
-    el_CAB = zeros((m*p*(T-1), 1))
-
-    for i in range(1, T):
-        CAkB = system.C1 @ mpow(A_tilde, i) @ system.B2
-        CAB[(i-1)*p:i*p, 0:m] = CAkB
-
-    for j in range(1, p*(T-1)+1):
-        for i in range(1, m+1):
-            el_CAB[i+(j-1)*m-1, 0] = CAB[j-1, i-1]
-
-    if gain_wv == inf:
-        b = block([
-            [-abs(system.C1@system.B2) @ ones((m, 1))],
-            [-el_CAB],
-            [el_CAB]
-        ])
-    else:
-        b = block([
-            [-abs((system.C1@system.B2)@ones((m, 1)))],
-            [-el_CAB],
-            [el_CAB],
-            [(gain_wv-1)*ones((m, 1))],
-            [zeros((m*m*T*2, 1))],
-        ])
-
-    # solve LP
-    x = cvxpy.Variable((f.shape[0], 1))
-    objective = cvxpy.Minimize(f.transpose() @ x)
-    constraints = [A @ x <= b]
-    problem = cvxpy.Problem(objective, constraints)
-    try:
-        problem.solve(solver=solver)
-    except cvxpy.SolverError as e:
-        raise cvxpy.SolverError(f"Error from CVXPY.\n{str(e)}")
-
-    return matrix(x.value)
-
-
-def _SVD_from(x: _np.ndarray,
-              T: int,
-              m: int,
-              p: int) -> _np.ndarray:
-    T_dash = math.floor(T/2) + 1
-
-    H_2 = []  # make list of H*_2i
-    for t in range(T):
-        H_2.append(
-            block([
-                [x[1 + (t*m + row)*m:1 + (t*m + row + 1)*m, :].T for row in range(m)],
-            ])
-        )
-
-    # make Hankel matrix
-    try:
-        H = block([
-            H_2[row:row + T_dash] for row in range(T_dash)
-        ])
-    except:
-        # TODO: rewrite
-        H = [H_2[row:row + T_dash] for row in range(T_dash)]
-        H[-1].append(H[-1][0] * 0)
-        H = block(H)
-
-    # singular value decomposition
-    # find Wo, S, Wc, with which it becomes H = Wo S Wc
-    Wo, S, Wc = _np.linalg.svd(H)
-    Wo = matrix(Wo)
-    S = matrix(_np.diag(S))
-    Wc = matrix(Wc)
-
-    if norm(H - Wo@S@Wc) / norm(H) > 0.01:
-        raise ValueError('SVD failed. Aborting Program...')
-
-    return H, Wo, S, Wc
-
-
-def _compose_Q_from_SVD(system: "IdealSystem",
-                        q: StaticQuantizer,
-                        T: int,
-                        H: _np.ndarray,
-                        Wo: _np.ndarray,
-                        S: _np.ndarray,
-                        Wc: _np.ndarray,
-                        dim: int,
-                        ) -> Tuple["DynamicQuantizer", bool]:
-    """
-    Parameters
-    ----------
-    system : IdealSystem
-    q : StaticQuantizer
-    T : int
-        Must be an odd number.
-    H : np.matrix
-    Wo : np.matrix
-    S : np.matrix
-    Wc : np.matrix
-    dim : int or np.inf
-
-    Returns
-    -------
-    Tuple[DynamicQuantizer, bool]
-        Quantizer is absolutely stable.
-        Returned bool means if dimension is reduced.
-    """
-    m = system.m
-    T_dash = int(H.shape[0] / m)
-
-    # set dimension
-    reduced = False
-    if dim < m*T_dash:  # needs reduction
-        nQ = dim
-        reduced = True
-    else:
-        nQ = m*T_dash
-
-    # reduce dimension
-    Wo_reduced = Wo[:, :nQ]
-    S_reduced = S[:nQ, :nQ]
-    Wc_reduced = Wc[:nQ, :]
-    # H_reduced = Wo_reduced @ S_reduced @ Wc_reduced
-
-    # compose Q
-    S_r_sqrt = mpow(S_reduced, 1/2)
-    B2 = S_r_sqrt @ Wc_reduced @ block([
-        [eye(m)],
-        [zeros((m*(T_dash-1), m))],
-    ])
-    C = block([
-        [eye(m), zeros((m, m*(T_dash - 1)))]
-    ]) @ Wo_reduced @ S_r_sqrt
-    A = pinv(
-        block([
-            [eye(m*(T_dash-1)), zeros((m*(T_dash-1), m))]
-        ])@Wo_reduced@S_r_sqrt
-    )@block([
-        [zeros((m*(T_dash-1), m)), eye(m*(T_dash-1))]
-    ]) @ Wo_reduced @ S_r_sqrt - B2 @ C
-
-    # check stability
-    Q = DynamicQuantizer(A, B2, C, q)
-    if Q.is_stable:
-        return Q, reduced
-    else:
-        # unstable case
-        nQ_bar = nQ*T
-
-        A_bar = block([
-            [zeros((nQ_bar - nQ, nQ)), kron(eye(T-1), A + B2 @ C)],
-            [kron(ones((1, T)), -B2@C)],
-        ])
-        B2_bar = block([
-            [zeros((nQ_bar-nQ, m))],
-            [B2],
-        ])
-        C_bar = kron(ones((1, T)), C)
-        Q = DynamicQuantizer(A_bar, B2_bar, C_bar, q)
-        return Q, reduced
-
-
-def _nq_numeric(system: "IdealSystem",
-                q: StaticQuantizer,
-                T: int,
-                T_solve: int,
-                gain_wv: float,
-                dim: int,
-                verbose: bool,
-                solver: str) -> Tuple[IsDone, "DynamicQuantizer", float]:
-    """
-    Finds the stable and optimal dynamic quantizer for `system`
-    numerically.
-
-    Parameters
-    ----------
-    system : IdealSystem
-    q : StaticQuantizer
-    T : int
-    T_solve : int
-    gain_wv : float
-    dim : int
-    verbose : bool
-    solver : str
-
-    Returns
-    -------
-    (isDone, Q, E) : Tuple[IsDone, DynamicQuantizer, float]
-    """
-    if verbose:
-        print("\nCalculating numerically...")
-    if T is None:
-        # TODO: support infinity evaluation time
-        return IsDone.NOT_YET, None, inf
-    if dim is None:
-        if verbose:
-            print("This may take very long time. Please wait or interrupt.")
-    elif T*dim > 1000:
-        if verbose:
-            print("This may take very long time. Please wait or interrupt.")
-    # STEP1. LP
-    start_time_lp = time.time()  # To measure time.
-    x = _lp(system, T_solve, gain_wv, solver)
-    E = x[0, 0] * q.delta
-    end_time_lp = time.time()  # To measure time.
-    if verbose:
-        print(f"Solved linear programming problem in {end_time_lp - start_time_lp:.3f}[s].")
-
-    # STEP2. SVD
-    start_time_SVD = time.time()  # To measure time.
-    H, Wo, S, Wc = _SVD_from(x, T, system.m, system.l)
-    end_time_SVD = time.time()  # To measure time.
-    if verbose:
-        print(f"Calculated SVD in {end_time_SVD - start_time_SVD:.3f}[s].")
-
-    # STEP3. compose Q
-    start_time_Q = time.time()  # To measure time.
-    Q, reduced = _compose_Q_from_SVD(
-        system,
-        q,
-        T_solve,
-        H,
-        Wo,
-        S,
-        Wc,
-        dim,
-    )  # Q is definitely stable.
-    end_time_Q = time.time()  # To measure time.
-    if verbose:
-        print(f"Composed Q in {end_time_Q - start_time_Q:.3f}[s].")
-
-    if reduced:
-        if verbose:
-            print("Calculating E(Q).")
-        E = system.E(Q, steptime=T, _check_stability=False)
-    if verbose:
-        print("Success!\n")
-    return IsDone.NUMERICALLY, Q, E
 
 
 def _find_tau(A_tilde, C_1, B_2, l: int, tau_max: int) -> int:
@@ -576,65 +251,9 @@ def _find_tau(A_tilde, C_1, B_2, l: int, tau_max: int) -> int:
     return -1
 
 
-def _nq_optimal(system: "IdealSystem",
-                q: StaticQuantizer,
-                T: int,
-                gain_wv: float,
-                dim: int,
-                verbose: bool) -> Tuple[IsDone, "DynamicQuantizer", float]:
-    """
-    Finds the stable and optimal dynamic quantizer for `system`
-    analytically[1]_.
-
-    Parameters
-    ----------
-    system : IdealSystem
-    q : StaticQuantizer
-    T : int
-    gain_wv : float
-    dim : int
-    verbose : bool
-
-    Returns
-    -------
-    (isDone, Q, E) : Tuple[IsDone, DynamicQuantizer, float]
-    """
-    if verbose:
-        print("Trying to calculate optimal dynamic quantizer...")
-    A_tilde = system.A + system.B2 @ system.C2  # convert to closed loop
-    # S2
-    tau = _find_tau(A_tilde, system.C1, system.B2, system.l, 10000)
-
-    if tau == -1:
-        if verbose:
-            print("Couldn't calculate optimal dynamic quantizer. Trying other method...")
-        return IsDone.NOT_YET, None, inf
-
-    Q = DynamicQuantizer(
-        A=A_tilde,
-        B=system.B2,
-        C=-pinv(system.C1 @ mpow(A_tilde, tau) @ system.B2) @ system.C1 @ mpow(A_tilde, tau+1),
-        q=q,
-    )
-
-    E = norm(abs(system.C1 @ mpow(A_tilde, tau) @ system.B2)) * q.delta
-
-    if not Q.is_stable:
-        if verbose:
-            print("Optimal dynamic quantizer is unstable. Trying other method...")
-        return IsDone.NOT_YET, None, inf
-    else:
-        if verbose:
-            print("Success!")
-        return IsDone.ANALYTICALLY, Q, E
-
-
 def _nq_serial_decomposition(system: "IdealSystem",
                              q: StaticQuantizer,
-                             T: int,
-                             gain_wv: float,
-                             dim: int,
-                             verbose: bool) -> Tuple[IsDone, "DynamicQuantizer", float]:
+                             verbose: bool) -> Tuple["DynamicQuantizer", float]:
     """
     Finds the stable and optimal dynamic quantizer for `system`
     using serial decomposition[1]_.
@@ -650,7 +269,7 @@ def _nq_serial_decomposition(system: "IdealSystem",
 
     Returns
     -------
-    (isDone, Q, E) : Tuple[IsDone, DynamicQuantizer, float]
+    (Q, E) : Tuple[DynamicQuantizer, float]
     """
     if verbose:
         print("Trying to calculate quantizer using serial system decomposition...")
@@ -666,16 +285,16 @@ def _nq_serial_decomposition(system: "IdealSystem",
     if len(unstable_zeros) == 0:
         n_time_delay = len([p for p in poles if p == 0])  # count pole-zero
         G = 1 / z**n_time_delay
-        F = tf/G
+        F = tf / G
         F_ss = _ctrl.tf2ss(F)
         B_F = matrix(F_ss.B)
         C_F = matrix(F_ss.C)
 
-        E = abs(C_F@B_F)[0, 0] * q.delta
+        E = abs(C_F @ B_F)[0, 0] * q.delta
     elif len(unstable_zeros) == 1:
         i = len(poles) - len(zeros_)  # relative order
         if i < 1:
-            return IsDone.NOT_YET, None, inf
+            return None, inf
         a = unstable_zeros[0]
         G = (z - a) / z**i
         F = _ctrl.minreal(tf / G, verbose=False)
@@ -683,31 +302,151 @@ def _nq_serial_decomposition(system: "IdealSystem",
         B_F = matrix(F_ss.B)
         C_F = matrix(F_ss.C)
 
-        E = (1 + abs(a)) * abs(C_F@B_F)[0, 0] * q.delta
+        E = (1 + abs(a)) * abs(C_F @ B_F)[0, 0] * q.delta
     else:
-        return IsDone.NOT_YET, None, inf
+        return None, inf
 
     A_F = matrix(F_ss.A)
     D_F = matrix(F_ss.D)
 
     # check
-    if (C_F@B_F)[0, 0] == 0:
+    if (C_F @ B_F)[0, 0] == 0:
         if verbose:
             print("CF @ BF == 0 became true. Couldn't calculate by using serial system decomposition.")
-        return IsDone.NOT_YET, None, inf
+        return None, inf
     if D_F[0, 0] != 0:
         if verbose:
             print("DF == 0 became true. Couldn't calculate by using serial system decomposition.")
-        return IsDone.NOT_YET, None, inf
+        return None, inf
     Q = DynamicQuantizer(
         A=A_F,
         B=B_F,
-        C=- 1/(C_F@B_F)[0, 0]*C_F@A_F,
+        C=- 1 / (C_F @ B_F)[0, 0] * C_F @ A_F,
         q=q
     )
     if verbose:
         print("Success!")
-    return IsDone.ANALYTICALLY, Q, E
+    return Q, E
+
+
+def _SVD_from(x: _np.ndarray,
+              T: int,
+              m: int,
+              p: int) -> _np.ndarray:
+    T_dash = math.floor(T / 2) + 1
+
+    H_2 = []  # make list of H*_2i (block Hankel matrix)
+    for t in range(T):
+        H_2.append(
+            block([
+                [x[1 + (t * m + row) * m:1 + (t * m + row + 1) * m, :].T for row in range(m)],
+            ])
+        )
+
+    # make Hankel matrix
+    try:
+        H = block([
+            H_2[row:row + T_dash] for row in range(T_dash)
+        ])
+    except:
+        # TODO: rewrite
+        H = [H_2[row:row + T_dash] for row in range(T_dash)]
+        H[-1].append(H[-1][0] * 0)
+        H = block(H)
+
+    # singular value decomposition
+    # find Wo, S, Wc, with which it becomes H = Wo S Wc
+    Wo, S, Wc = _np.linalg.svd(H)
+    Wo = matrix(Wo)
+    S = matrix(_np.diag(S))
+    Wc = matrix(Wc)
+
+    if norm(H - Wo @ S @ Wc) / norm(H) > 0.01:
+        raise ValueError('SVD failed. Try another method.')
+
+    return H, Wo, S, Wc
+
+
+def _compose_Q_from_SVD(system: "IdealSystem",
+                        q: StaticQuantizer,
+                        T: int,
+                        H: _np.ndarray,
+                        Wo: _np.ndarray,
+                        S: _np.ndarray,
+                        Wc: _np.ndarray,
+                        dim: int) -> Tuple["DynamicQuantizer", bool]:
+    """
+    Parameters
+    ----------
+    system : IdealSystem
+    q : StaticQuantizer
+    T : int
+        Must be an odd number.
+    H : np.matrix
+    Wo : np.matrix
+    S : np.matrix
+    Wc : np.matrix
+    dim : int or np.inf
+
+    Returns
+    -------
+    Tuple[DynamicQuantizer, bool]
+        Quantizer is absolutely stable.
+        Returned bool means if order is reduced.
+    """
+    m = system.m
+    T_dash = int(H.shape[0] / m)
+
+    # set order
+    reduced = False
+    if dim < m * T_dash:  # needs reduction
+        nQ = dim
+        reduced = True
+    else:
+        nQ = m * T_dash
+
+    # reduce order
+    Wo_reduced = Wo[:, :nQ]
+    S_reduced = S[:nQ, :nQ]
+    Wc_reduced = Wc[:nQ, :]
+    # H_reduced = Wo_reduced @ S_reduced @ Wc_reduced
+
+    # compose Q
+    S_r_sqrt = mpow(S_reduced, 1 / 2)
+    B2 = S_r_sqrt @ Wc_reduced @ block([
+        [eye(m)],
+        [zeros((m * (T_dash - 1), m))],
+    ])
+    C = block([
+        [eye(m), zeros((m, m * (T_dash - 1)))]
+    ]) @ Wo_reduced @ S_r_sqrt
+    A = pinv(
+        block([
+            [eye(m * (T_dash - 1)), zeros((m * (T_dash - 1), m))]
+        ]) @ Wo_reduced @ S_r_sqrt
+    ) @ block([
+        [zeros((m * (T_dash - 1), m)), eye(m * (T_dash - 1))]
+    ]) @ Wo_reduced @ S_r_sqrt - B2 @ C
+
+    # check stability
+    Q = DynamicQuantizer(A, B2, C, q)
+    if Q.is_stable:
+        return Q, reduced
+    else:
+        # unstable case
+        nQ_bar = nQ * T
+
+        A_bar = block([
+            [zeros((nQ_bar - nQ, nQ)), kron(eye(T - 1), A + B2 @ C)],
+            [kron(ones((1, T)), -B2 @ C)],
+        ])
+        B2_bar = block([
+            [zeros((nQ_bar - nQ, m))],
+            [B2],
+        ])
+        C_bar = kron(ones((1, T)), C)
+        Q = DynamicQuantizer(A_bar, B2_bar, C_bar, q)
+        return Q, reduced
 
 
 class DynamicQuantizer():
@@ -820,7 +559,7 @@ class DynamicQuantizer():
                     if abs(ret - ret_past) < 1e-8:
                         break
                 i = i + 1
-                A_i = A_i @ (self.A + self.B@self.C)
+                A_i = A_i @ (self.A + self.B @ self.C)
 
         return ret
 
@@ -856,22 +595,73 @@ class DynamicQuantizer():
         # if T is None:
         #     # TODO: support infinity evaluation time
         #     return None, inf
-        # TODO: siso のチェック
+        if system.m != 1:
+            raise ValueError("`design_GB` and `design_DE` is currently supported for SISO systems only.")
 
         # Values representing the stability or gain_wv.y
         # if max(constraint_values) < 0, this quantizer satisfies the
         # constraints.
         constraint_values = [
-            eig_max(self.A+self.B@self.C) - 1,
+            eig_max(self.A + self.B @ self.C) - 1,
         ]
         if not _np.isposinf(gain_wv):
             constraint_values.append(self.gain_wv(T) - gain_wv)
 
         max_v = max(constraint_values)
         if max_v < 0:
-            return - 1.1 ** (- system.E(self))  # TODO: selfとsystemが不安定に近いとき，最適化初期で計算時間がかかりすぎる
+            return - 1.1 ** (- system.E(self))
         else:
             return max_v
+
+    def order_reduced(
+        self,
+        dim,
+    ) -> "DynamicQuantizer":
+        """
+        Returns the quantizer with its order reduced.
+
+        Note that the quantizer with the reduced order
+        will generally have larger `E(Q)` and a larger
+        `gain_wv` than those of the original quantizer. 
+        You should check the performance and gain yourself.
+
+        This function requires slycot. Please install it.
+
+        Parameters
+        ----------
+        dim : int
+            Order of the quantizer to be returned.
+            Must be greater than `0` and less than `self.N`.
+
+        Returns
+        -------
+        Q : DynamicQuantizer
+
+        Raises
+        ------
+        ImportError
+            if NQLib couldn't import slycot.
+        """
+        try:
+            from slycot import ab09ad
+        except ImportError as e:
+            raise ImportError((
+                "Reducing order of a quantizer requires slycot."
+                " Please install it."
+            ))
+        # マルコフパラメータから特異値分解する
+        Nr, Ar, Br, Cr, hsv = ab09ad(
+            "D",  # means "Discrete time"
+            "B",  # balanced (B) or not (N)
+            "S",  # scale (S) or not (N)
+            self.N,  # np.size(A,0)
+            self.m,  # np.size(B,1)
+            self.m,  # np.size(C,0)
+            self.A, self.B, self.C,
+            nr=dim,
+            tol=0.0,
+        )
+        return DynamicQuantizer(Ar, Br, Cr, self.q)
 
     @property
     def is_stable(self) -> bool:
@@ -889,7 +679,7 @@ class DynamicQuantizer():
            quantizers for discrete-valued input control;IEEE Transactions
            on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
         """
-        if eig_max(self.A+self.B@self.C) > 1 - 1e-8:
+        if eig_max(self.A + self.B @ self.C) > 1 - 1e-8:
             return False
         else:
             return True
@@ -916,14 +706,18 @@ class DynamicQuantizer():
                                 self.q)
 
     @staticmethod
-    def find_the_optimal_for(system: "IdealSystem",
-                             *,
-                             q: StaticQuantizer,
-                             T: int = None,
-                             gain_wv: float = inf,
-                             dim: int = None,
-                             verbose: bool = False,
-                             solver: str = "") -> Tuple[IsDone, "DynamicQuantizer", float]:
+    def design_try_all(system: "IdealSystem",
+                       *,
+                       q: StaticQuantizer,
+                       T: int = None,
+                       gain_wv: float = inf,
+                       dim: int = inf,
+                       verbose: bool = False,
+                       use_analytical_method=True,
+                       use_LP_method=True,
+                       use_design_GB_method=True,
+                       use_DE_method=False,
+                       solver: str = "") -> Tuple["DynamicQuantizer", float]:
         """
         Calculates the stable and optimal dynamic quantizer `Q` for `system`.
         Returns `(Q, E)`. `E` is the estimation of E(Q)[1]_,[2]_,[3]_.
@@ -942,8 +736,8 @@ class DynamicQuantizer():
             Upper limit of gain w->v . Must be greater than `0`.
             (The default is `numpy.inf`).
         dim : int, optional
-            Upper limit of dimension of `Q`. Must be greater than `0`.
-            (The default is `None`, which means infinity).
+            Upper limit of order of `Q`. Must be greater than `0`.
+            (The default is `inf`).
         verbose : bool, optional
             Whether to print the details.
             (The default is `False`).
@@ -976,6 +770,28 @@ class DynamicQuantizer():
         .. [3] 南，加嶋：システムの直列分解に基づく動的量子化器設計；計測自動制御学会
            論文集，Vol. 52, pp. 46–51(2016)
         """
+        def _print_report(Q, method: str):
+            if verbose:
+                if Q is None:
+                    print(
+                        f"Using {method}, ",
+                        "NQLib couldn't find the quantizer.\n",
+                    )
+                else:
+                    print(
+                        f"Using {method}, NQLib found the following quantizer.\n",
+                        "Q:\n",
+                        "A =\n",
+                        f"{Q.A}\n",
+                        "B =\n",
+                        f"{Q.B}\n",
+                        "C =\n",
+                        f"{Q.C}\n",
+                        f"E = {system.E(Q)}\n",
+                        f"gain_wv = {Q.gain_wv()}\n",
+                        "\n",
+                    )
+        # TODO: 引数とドキュメントを見直す
         # TODO: 最小実現する
         # check system
         if system.__class__.__name__ != "IdealSystem":
@@ -994,17 +810,6 @@ class DynamicQuantizer():
                 '`q` must be an instance of `nqlib.StaticQuantizer`.'
             )
 
-        # check T and choose method
-        if T is None or T == inf:
-            use_analytic_method = True
-            T_solve = T
-        else:
-            if T % 2 == 0:
-                T_solve = T + 1
-            else:
-                T_solve = T
-            use_analytic_method = False
-
         # check gain
         if gain_wv < 1:
             raise ValueError(
@@ -1012,77 +817,262 @@ class DynamicQuantizer():
             )
 
         # check dim
-        if dim is None:
-            dim = inf
-        elif type(dim) is not int:
-            raise TypeError('`dim` must be an integer.')
+        if dim != inf and not isinstance(dim, int):
+            raise TypeError("`dim` must be `numpy.inf` or an instance of `int`.")
         elif dim < 1:
             raise ValueError('`dim` must be greater than `0`.')
 
-        done = IsDone.NOT_YET
-        if use_analytic_method:
-            # TODO: Even if `T` is specified, use these methods,
-            # check `gain` and `dim`, and return `Q`.
-            if system.type == _ConnectionType.FF and system.P.tf1.issiso():
-                # FF and SISO
-                done, Q, E = _nq_serial_decomposition(system, q, T, gain_wv, dim, verbose)
-            if not done and system.m >= system.l:
-                done, Q, E = _nq_optimal(system, q, T, gain_wv, dim, verbose)
-        if not done:  # numerically
-            # TODO: case `T` is infinity
-            if verbose:
-                print("Couldn't calculate analytically.")
-            done, Q, E = _nq_numeric(system,
-                                     q,
-                                     T,
-                                     T_solve,
-                                     gain_wv,
-                                     dim,
-                                     verbose,
-                                     solver)
+        # analytically optimize
+        if use_analytical_method:
+            Q, E = DynamicQuantizer.design_AN(
+                system,
+                q=q,
+                dim=dim,
+                gain_wv=gain_wv,
+                verbose=verbose,
+            )
+            _print_report(Q, "the analytical method")
+            if Q is not None:
+                return Q, E
 
-        # TODO: check gain, dim?
-        return Q, E
+        candidates = []
+        # numerically optimize
+        if use_LP_method:
+            Q, E = DynamicQuantizer.design_LP(
+                system,
+                q=q,
+                dim=dim,
+                T=T,
+                gain_wv=gain_wv,
+                solver=solver,
+                verbose=verbose,
+            )
+
+            _print_report(Q, "the LP method")
+            if Q is not None:
+                candidates.append(
+                    dict(Q=Q, E=E)
+                )
+        if dim is None or dim == inf:
+            dim = system.n
+        if use_design_GB_method and isinstance(dim, int):
+            Q, E = DynamicQuantizer.design_GB(
+                system,
+                q=q,
+                dim=dim,
+                T=T,
+                gain_wv=gain_wv,
+                verbose=verbose,
+            )
+            _print_report(Q, "the gradient based method")
+            if Q is not None:
+                candidates.append(
+                    dict(Q=Q, E=E)
+                )
+        if use_DE_method and isinstance(dim, int):
+            Q, E = DynamicQuantizer.design_DE(
+                system,
+                q=q,
+                dim=dim,
+                T=T,
+                gain_wv=gain_wv,
+                verbose=verbose,
+            )
+            _print_report(Q, "the gradient based method")
+            if Q is not None:
+                candidates.append(
+                    dict(Q=Q, E=E)
+                )
+
+        # compare all candidates and return the best
+        if len(candidates) > 0:
+            Q, E = min(
+                candidates,
+                key=lambda c: c.E,
+            )
+            return Q, E
+        else:
+            if verbose:
+                print(
+                    "NQLib could not design a quantizer under these conditions. ",
+                    "Please try different conditions.",
+                )
+
+            return None, inf
 
     @staticmethod
-    def ODQ(system: "IdealSystem",
-            *,
-            q: StaticQuantizer,
-            T: int = None,
-            gain_wv: float = inf,
-            dim: int = None,
-            verbose: bool = False,
-            solver: str = "") -> Tuple["DynamicQuantizer", float]:
+    def design_AN(system: "IdealSystem",
+                  *,
+                  q: StaticQuantizer,
+                  dim: int = inf,
+                  gain_wv: float = inf,
+                  verbose: bool = False) -> Tuple["DynamicQuantizer", float]:
         """
-        A shortened form of `DynamicQuantizer.find_the_optimal_for()`.
-
-        Calculates the stable and optimal dynamic quantizer `Q` for `system`.
+        Finds the stable and optimal dynamic quantizer for `system`
+        analytically[2]_,[3]_.
         Returns `(Q, E)`. `E` is the estimation of E(Q)[1]_,[2]_,[3]_.
+
+        If NQLib couldn't find `Q` such that
+        ```
+        all([
+            Q.N <= dim,
+            Q.gain_wv() < gain_wv,
+            Q.is_stable,
+        ])
+        ```
+        becomes `True`, this method returns `(None, inf)`.
 
         Parameters
         ----------
         system : IdealSystem
-            Must be stable.
+            Must be stable and SISO.
         q : StaticQuantizer
             Returned dynamic quantizer contains this static quantizer.
             `q.delta` is important to estimate E(Q).
+        dim : int
+            Upper limit of order of `Q`. Must be greater than `0`.
+            (The default is `inf`).
+        gain_wv : float, optional
+            Upper limit of gain w->v . Must be greater than `0`.
+            (The default is `numpy.inf`).
+        verbose : bool, optional
+            Whether to print the details.
+            (The default is `False`).
+
+        Returns
+        -------
+        (Q, E) : Tuple[DynamicQuantizer, float]
+            `Q` is the stable and optimal dynamic quantizer for `system`.
+            `E` is estimation of E(Q).
+
+        Raises
+        ------
+        ValueError
+            If `system` is unstable.
+
+        References
+        ----------
+        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
+           quantizers for discrete-valued input control;IEEE Transactions
+           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
+        .. [2]  Y. Minami, S. Azuma and T. Sugie:  An optimal dynamic quantizer
+           for feedback control with discrete-valued signal constraints;2007
+           46th IEEEConference on Decision and Control, pp. 2259–2264, IEEE
+           (2007)
+        .. [3] 南，加嶋：システムの直列分解に基づく動的量子化器設計；計測自動制御学会
+           論文集，Vol. 52, pp. 46–51(2016)
+        .. [4] R. Morita, S. Azuma, Y. Minami, & T. Sugie: Graphical design
+           software for dynamic quantizers in control systems; SICE Journal 
+           of Control, Measurement, and System Integration, Vol. 4, No. 5, 
+           pp. 372-379 (2011)
+        """
+        if verbose:
+            print("Trying to calculate optimal dynamic quantizer...")
+
+        if system.type == _ConnectionType.FF and system.P.tf1.issiso():
+            # FF and SISO
+            Q, E = _nq_serial_decomposition(system, q, verbose)
+            if Q is not None:
+                return Q, E
+        if system.m >= system.l:
+            A_tilde = system.A + system.B2 @ system.C2  # convert to closed loop
+            # S2
+            tau = _find_tau(A_tilde, system.C1, system.B2, system.l, 10000)
+
+            if tau == -1:
+                if verbose:
+                    print("Couldn't calculate optimal dynamic quantizer analytically. Trying other method...")
+                return None, inf
+
+            Q = DynamicQuantizer(
+                A=A_tilde,
+                B=system.B2,
+                C=-pinv(system.C1 @ mpow(A_tilde, tau) @ system.B2) @ system.C1 @ mpow(A_tilde, tau + 1),
+                q=q,
+            )
+
+            E = norm(abs(system.C1 @ mpow(A_tilde, tau) @ system.B2)) * q.delta
+            Q_gain_wv = Q.gain_wv()
+
+            if not Q.is_stable:
+                if verbose:
+                    print("The quantizer is unstable. Try other method.")
+                return None, inf
+            elif Q.N > dim:
+                if verbose:
+                    print(
+                        f"The order of the quantizer {Q.N} is greater than {dim}, the value you specified. ",
+                        "Try other method.",
+                    )
+                return None, inf
+            elif Q_gain_wv > gain_wv:
+                if verbose:
+                    print(
+                        f"The `gain_wv` of the quantizer {Q_gain_wv} is greater than {gain_wv}, the value you specified. ",
+                        "Try other method.",
+                    )
+                return None, inf
+            else:
+                if verbose:
+                    print("Success!")
+                return Q, E
+        else:
+            if verbose:
+                print(
+                    "`system.m >= system.l` must be `True`. Try other method.",
+                )
+            return None, inf
+
+    @staticmethod
+    def design_LP(system: "IdealSystem",
+                  *,
+                  q: StaticQuantizer,
+                  dim: int = inf,
+                  T: int = None,
+                  gain_wv: float = inf,
+                  solver: str = "",
+                  verbose: bool = False) -> Tuple["DynamicQuantizer", float]:
+        """
+        Finds the stable and optimal dynamic quantizer for `system`
+        with method using linear programming method[1]_.
+        Returns `(Q, E)`. `E` is the estimation of E(Q)[1]_,[2]_,[3]_.
+
+        If NQLib couldn't find `Q` such that
+        ```
+        all([
+            Q.N <= dim,
+            Q.is_stable,
+        ])
+        ```
+        becomes `True`, this method returns `(None, inf)`.
+
+        Note that this method doesn't confirm that
+        `Q.gain_wv() < gain_wv` becomes `True`.
+
+        Parameters
+        ----------
+        system : IdealSystem
+            Must be stable and SISO.
+        q : StaticQuantizer
+            Returned dynamic quantizer contains this static quantizer.
+            `q.delta` is important to estimate E(Q).
+        dim : int
+            Upper limit of order of `Q`. Must be greater than `0`.
+            (The default is `inf`).
         T : int, None or numpy.inf, optional
             Estimation time. Must be greater than `0`.
             (The default is `None`, which means infinity).
         gain_wv : float, optional
             Upper limit of gain w->v . Must be greater than `0`.
             (The default is `numpy.inf`).
-        dim : int, optional
-            Upper limit of dimension of `Q`. Must be greater than `0`.
-            (The default is `None`, which means infinity).
-        verbose : bool, optional
-            Whether to print the details.
-            (The default is `False`).
         solver : str, optional
             Name of CVXPY solver. You can check the available solvers by
             `nqlib.installed_solvers()`.
             (The default is `""`, which implies that this function doesn't
             specify the solver).
+        verbose : bool, optional
+            Whether to print the details.
+            (The default is `False`).
 
         Returns
         -------
@@ -1106,27 +1096,202 @@ class DynamicQuantizer():
            (2007)
         .. [3] 南，加嶋：システムの直列分解に基づく動的量子化器設計；計測自動制御学会
            論文集，Vol. 52, pp. 46–51(2016)
+        .. [4] R. Morita, S. Azuma, Y. Minami, & T. Sugie: Graphical design
+           software for dynamic quantizers in control systems; SICE Journal 
+           of Control, Measurement, and System Integration, Vol. 4, No. 5, 
+           pp. 372-379 (2011)
         """
-        return DynamicQuantizer.find_the_optimal_for(system,
-                                                     q=q,
-                                                     T=T,
-                                                     gain_wv=gain_wv,
-                                                     dim=dim,
-                                                     verbose=verbose,
-                                                     solver=solver)
+        if verbose:
+            print("Trying to design a dynamic quantizer using LP...")
+        if T is None or T == inf:
+            T = inf
+            T_solve = T
+            if verbose:
+                print(
+                    "`design_LP` currently supports only finite `T`.",
+                    "Specify `T` or try other method.",
+                )
+            return None, inf
+        else:
+            if T % 2 == 0:
+                T_solve = T + 1
+            else:
+                T_solve = T
+        if T * dim > 1000:
+            if verbose:
+                print("This may take very long time. Please wait or interrupt.")
+
+        def _lp() -> _np.ndarray:
+            """
+            Composes and solves linear problem to find good quantizer.
+
+            Returns
+            -------
+            _np.ndarray
+                Solution of LP.
+
+            Raises
+            ------
+            cvxpy.SolverError
+                if no solver named `solver` found.
+            """
+            m = system.m
+            p = system.l
+
+            A_tilde = system.A + system.B2 @ system.C2
+
+            if gain_wv == inf:
+                f = zeros((1 + m**2 * T + p * m * (T - 1), 1))
+            else:
+                f = zeros((1 + 2 * m**2 * T + p * m * (T - 1), 1))
+            f[0, 0] = 1
+
+            # compose Phi
+            Phi = zeros((m * p * (T - 1), m * m * T))
+            for i in range(1, T):
+                Phi_dash = kron(
+                    system.C1 @ mpow(A_tilde, i - 1) @ system.B2, eye(m)
+                )
+                for j in range(i, T):   # TODO: Any easier way?
+                    Phi[(j - 1) * m * p: j * m * p, (j - i) * m * m: (j - i + 1) * m * m] = Phi_dash
+
+            # making 'matrix -> vector' transposer
+            eye_sumE = kron(
+                ones((1, m * (T - 1))), eye(p)
+            )
+            eye_sumH = kron(
+                ones((1, m * T)), eye(m)
+            )
+
+            # finalize
+            if gain_wv == inf:
+                A = block([
+                    [-ones((p, 1)), zeros((p, m * m * T)), eye_sumE],
+                    [zeros((p * m * (T - 1), 1)), Phi, -eye(m * p * (T - 1))],
+                    [zeros((p * m * (T - 1), 1)), -Phi, -eye(m * p * (T - 1))],
+                ])
+            else:
+                A = block([
+                    [-ones((p, 1)), zeros((p, m * m * T)), zeros((p, m * m * T)), eye_sumE],
+                    [zeros((p * m * (T - 1), 1)), Phi, zeros((p * m * (T - 1), m * m * T)), -eye(m * p * (T - 1))],
+                    [zeros((p * m * (T - 1), 1)), -Phi, zeros((p * m * (T - 1), m * m * T)), -eye(m * p * (T - 1))],
+                    [zeros((m, 1)), zeros((m, m * m * T)), eye_sumH, zeros((m, m * p * (T - 1)))],
+                    [zeros((m * m * T, 1)), eye(m * m * T), -eye(m * m * T), zeros((m * m * T, m * p * (T - 1)))],
+                    [zeros((m * m * T, 1)), -eye(m * m * T), -eye(m * m * T), zeros((m * m * T, m * p * (T - 1)))],
+                ])
+
+            # making C A^k B ,changing matrix to vector
+            CAB = zeros(((T - 1) * p, m))
+            el_CAB = zeros((m * p * (T - 1), 1))
+
+            for i in range(1, T):
+                CAkB = system.C1 @ mpow(A_tilde, i) @ system.B2
+                CAB[(i - 1) * p:i * p, 0:m] = CAkB
+
+            for j in range(1, p * (T - 1) + 1):
+                for i in range(1, m + 1):
+                    el_CAB[i + (j - 1) * m - 1, 0] = CAB[j - 1, i - 1]
+
+            if gain_wv == inf:
+                b = block([
+                    [-abs(system.C1 @ system.B2) @ ones((m, 1))],
+                    [-el_CAB],
+                    [el_CAB]
+                ])
+            else:
+                b = block([
+                    [-abs((system.C1 @ system.B2) @ ones((m, 1)))],
+                    [-el_CAB],
+                    [el_CAB],
+                    [(gain_wv - 1) * ones((m, 1))],
+                    [zeros((m * m * T * 2, 1))],
+                ])
+
+            # solve LP
+            x = cvxpy.Variable((f.shape[0], 1))
+            objective = cvxpy.Minimize(f.transpose() @ x)
+            constraints = [A @ x <= b]
+            problem = cvxpy.Problem(objective, constraints)
+            try:
+                problem.solve(solver=solver or None)
+            except cvxpy.SolverError as e:
+                raise cvxpy.SolverError(f"Error from CVXPY.\n{str(e)}")
+
+            return matrix(x.value)
+
+        # STEP1. LP
+        start_time_lp = time.time()  # To measure time.
+        x = _lp()  # Markov Parameter
+        E = x[0, 0] * q.delta
+        end_time_lp = time.time()  # To measure time.
+        if verbose:
+            print(f"Solved linear programming problem in {end_time_lp - start_time_lp:.3f}[s].")
+
+        # STEP2. SVD
+        start_time_SVD = time.time()  # To measure time.
+        H, Wo, S, Wc = _SVD_from(x, T, system.m, system.l)
+        end_time_SVD = time.time()  # To measure time.
+        if verbose:
+            print(f"Calculated SVD in {end_time_SVD - start_time_SVD:.3f}[s].")
+
+        # STEP3. compose Q
+        start_time_Q = time.time()  # To measure time.
+        Q, reduced = _compose_Q_from_SVD(
+            system,
+            q,
+            T_solve,
+            H,
+            Wo,
+            S,
+            Wc,
+            dim,
+        )  # Q is definitely stable.
+        end_time_Q = time.time()  # To measure time.
+        if verbose:
+            print(f"Composed Q in {end_time_Q - start_time_Q:.3f}[s].")
+
+        if reduced:
+            if verbose:
+                print("Calculating E(Q).")
+            E = system.E(Q, steptime=T, _check_stability=False)
+        Q_gain_wv = Q.gain_wv(steptime=T)
+        if Q.N > dim:
+            if verbose:
+                warnings.warn(
+                    f"The order of the quantizer {Q.N} is greater than {dim}, the value you specified. ",
+                    "Please reduce the order manually using `order_reduced()`, or try other method.",
+                )
+            return None, inf
+        elif Q_gain_wv > gain_wv:
+            warnings.warn(
+                f"The `gain_wv` of the quantizer {Q_gain_wv} is greater than {gain_wv}, the value you specified. ",
+            )
+        if verbose:
+            print("Success!")
+        return Q, E
 
     @staticmethod
-    def gradient_based(system: "IdealSystem",
-                       *,
-                       q: StaticQuantizer,
-                       dim: int,
-                       T: int = None,  # TODO: これより下を反映
-                       gain_wv: float = inf,
-                       verbose: bool = False,
-                       method: str = "SLSQP") -> Tuple["DynamicQuantizer", float]:
+    def design_GB(system: "IdealSystem",
+                  *,
+                  q: StaticQuantizer,
+                  dim: int,
+                  T: int = None,  # TODO: これより下を反映
+                  gain_wv: float = inf,
+                  verbose: bool = False,
+                  method: str = "SLSQP") -> Tuple["DynamicQuantizer", float]:
         """
         Finds the stable and optimal dynamic quantizer `Q` for `system`.
         Returns `(Q, E)`. `E` is the estimation of E(Q)[1]_,[2]_,[3]_.
+
+        If NQLib couldn't find `Q` such that
+        ```
+        all([
+            Q.N == dim,
+            Q.gain_wv() < gain_wv,
+            Q.is_stable,
+        ])
+        ```
+        becomes `True`, this method returns `(None, inf)`.
 
         Parameters
         ----------
@@ -1136,7 +1301,7 @@ class DynamicQuantizer():
             Returned dynamic quantizer contains this static quantizer.
             `q.delta` is important to estimate E(Q).
         dim : int
-            Dimension of `Q`. Must be greater than `0`.
+            Upper limit of order of `Q`. Must be greater than `0`.
         T : int, None or numpy.inf, optional
             Estimation time. Must be greater than `0`.
             (The default is `None`, which means infinity).
@@ -1179,7 +1344,7 @@ class DynamicQuantizer():
         #     # TODO: support infinity evaluation time
         #     return None, inf
         if not isinstance(dim, int):
-            raise TypeError("`dim` must be an instance of `int`.")
+            raise TypeError("`dim` must be `numpy.inf` or an instance of `int`.")
         elif dim < 1:
             raise ValueError("`dim` must be greater than `0`.")
         # TODO: siso のチェック
@@ -1201,11 +1366,11 @@ class DynamicQuantizer():
         def _Q(x):
             # controllable canonical form
             _A = block([
-                [zeros((dim-1, 1)), eye(dim-1)],
+                [zeros((dim - 1, 1)), eye(dim - 1)],
                 [-a(x)],
             ])
             _B = block([
-                [zeros((dim-1, 1))],
+                [zeros((dim - 1, 1))],
                 [1],
             ])
             _C = c(x)
@@ -1227,7 +1392,7 @@ class DynamicQuantizer():
             print(f"The optimization method is '{method}'.")
             print("### Message from `scipy.optimize.minimize()`. ###")
         result = _minimize(obj,
-                           x0=zeros(2*dim)[0],
+                           x0=zeros(2 * dim)[0],
                            tol=0,
                            options={
                                "disp": verbose,
@@ -1254,16 +1419,14 @@ class DynamicQuantizer():
         return Q, E
 
     @staticmethod
-    def DE(system: "IdealSystem",
-            *,
-            q: StaticQuantizer,
-            dim: int,
-            T: int = None,  # TODO: これより下を反映
-            gain_wv: float = inf,
-            verbose: bool = False) -> Tuple["DynamicQuantizer", float]:  # TODO: method のデフォルトを決める
+    def design_DE(system: "IdealSystem",
+                  *,
+                  q: StaticQuantizer,
+                  dim: int,
+                  T: int = None,  # TODO: これより下を反映
+                  gain_wv: float = inf,
+                  verbose: bool = False) -> Tuple["DynamicQuantizer", float]:  # TODO: method のデフォルトを決める
         """
-        A shortened form of `DynamicQuantizer.find_the_optimal_for()`.
-
         Calculates the stable and optimal dynamic quantizer `Q` for `system`.
         Returns `(Q, E)`. `E` is the estimation of E(Q)[1]_,[2]_,[3]_.
 
@@ -1275,7 +1438,7 @@ class DynamicQuantizer():
             Returned dynamic quantizer contains this static quantizer.
             `q.delta` is important to estimate E(Q).
         dim : int
-            Dimension of `Q`. Must be greater than `0`.
+            Order of `Q`. Must be greater than `0`.
         T : int, None or numpy.inf, optional
             Estimation time. Must be greater than `0`.
             (The default is `None`, which means infinity).
@@ -1335,11 +1498,11 @@ class DynamicQuantizer():
         def _Q(x):
             # controllable canonical form
             _A = block([
-                [zeros((dim-1, 1)), eye(dim-1)],
+                [zeros((dim - 1, 1)), eye(dim - 1)],
                 [-a(x)],
             ])
             _B = block([
-                [zeros((dim-1, 1))],
+                [zeros((dim - 1, 1))],
                 [1],
             ])
             _C = c(x)
@@ -1372,12 +1535,6 @@ class DynamicQuantizer():
             strategy='rand2exp',
             disp=verbose,
         )
-        # - 'currenttobest1exp'  いいかも
-        # - 'rand2exp'  わるくはない
-        # - 'currenttobest1bin'  いいかも 答えが求まりにくい？
-        # - 'best2bin'  わるくない
-        # - 'rand2bin'  わるくない
-        # - 'rand1bin'  精度がいい？
 
         if verbose:
             print(result.message)
@@ -1425,7 +1582,7 @@ class DynamicQuantizer():
         xi = zeros((len(self.A), length))
 
         for i in range(length):
-            v[:, i:i+1] = matrix(self.q(self.C @ xi[:, i:i+1] + u[:, i:i+1]))
+            v[:, i:i + 1] = matrix(self.q(self.C @ xi[:, i:i + 1] + u[:, i:i + 1]))
             if i < length - 1:
-                xi[:, i:i+1+1] = matrix(self.A @ xi[:, i:i+1] + self.B @ (v[:, i:i+1] - u[:, i:i+1]))
+                xi[:, i:i + 1 + 1] = matrix(self.A @ xi[:, i:i + 1] + self.B @ (v[:, i:i + 1] - u[:, i:i + 1]))
         return v

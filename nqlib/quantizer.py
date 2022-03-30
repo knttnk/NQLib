@@ -531,7 +531,7 @@ class DynamicQuantizer():
         References
         ----------
         .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
-           quantizers for discrete-valued input control; IEEE Transactions
+           quantizers for discrete-valued input control;IEEE Transactions
            on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
         """
         if steptime is None:  # None means infinity.
@@ -588,9 +588,10 @@ class DynamicQuantizer():
 
         References
         ----------
-        .. [1] Y. Minami: Design of model following control systems with
-           discrete-valued signal constraints;International Journal of Control,
-           Automationand Systems, Vol. 14, pp. 331–339 (2016)
+        .. [5] Y. Minami and T. Muromaki: Differential evolution-based
+           synthesis of dynamic quantizers with fixed-structures; International
+           Journal of Computational Intelligence and Applications, Vol. 15,
+           No. 2, 1650008 (2016)
         """
         # if T is None:
         #     # TODO: support infinity evaluation time
@@ -675,9 +676,10 @@ class DynamicQuantizer():
 
         References
         ----------
-        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
-           quantizers for discrete-valued input control;IEEE Transactions
-           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
+        .. [2]  S. Azuma, Y. Minami and T. Sugie: Optimal dynamic quantizers
+           for feedback control with discrete-level actuators; Journal of 
+           Dynamic Systems, Measurement, and Control, Vol. 133, No. 2, 021005
+           (2011)
         """
         if eig_max(self.A + self.B @ self.C) > 1 - 1e-8:
             return False
@@ -763,12 +765,20 @@ class DynamicQuantizer():
         .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
            quantizers for discrete-valued input control;IEEE Transactions
            on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
-        .. [2]  Y. Minami, S. Azuma and T. Sugie:  An optimal dynamic quantizer
-           for feedback control with discrete-valued signal constraints;2007
-           46th IEEEConference on Decision and Control, pp.  2259–2264, IEEE
-           (2007)
+        .. [2]  S. Azuma, Y. Minami and T. Sugie: Optimal dynamic quantizers
+           for feedback control with discrete-level actuators; Journal of 
+           Dynamic Systems, Measurement, and Control, Vol. 133, No. 2, 021005
+           (2011)
         .. [3] 南，加嶋：システムの直列分解に基づく動的量子化器設計；計測自動制御学会
            論文集，Vol. 52, pp. 46–51(2016)
+        .. [4] R. Morita, S. Azuma, Y. Minami and T. Sugie: Graphical design
+           software for dynamic quantizers in control systems; SICE Journal 
+           of Control, Measurement, and System Integration, Vol. 4, No. 5, 
+           pp. 372-379 (2011)
+        .. [5] Y. Minami and T. Muromaki: Differential evolution-based
+           synthesis of dynamic quantizers with fixed-structures; International
+           Journal of Computational Intelligence and Applications, Vol. 15,
+           No. 2, 1650008 (2016)
         """
         def _print_report(Q, method: str):
             if verbose:
@@ -952,19 +962,12 @@ class DynamicQuantizer():
 
         References
         ----------
-        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
-           quantizers for discrete-valued input control;IEEE Transactions
-           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
-        .. [2]  Y. Minami, S. Azuma and T. Sugie:  An optimal dynamic quantizer
-           for feedback control with discrete-valued signal constraints;2007
-           46th IEEEConference on Decision and Control, pp. 2259–2264, IEEE
-           (2007)
+        .. [2]  S. Azuma, Y. Minami and T. Sugie: Optimal dynamic quantizers
+           for feedback control with discrete-level actuators; Journal of 
+           Dynamic Systems, Measurement, and Control, Vol. 133, No. 2, 021005
+           (2011)
         .. [3] 南，加嶋：システムの直列分解に基づく動的量子化器設計；計測自動制御学会
            論文集，Vol. 52, pp. 46–51(2016)
-        .. [4] R. Morita, S. Azuma, Y. Minami, & T. Sugie: Graphical design
-           software for dynamic quantizers in control systems; SICE Journal 
-           of Control, Measurement, and System Integration, Vol. 4, No. 5, 
-           pp. 372-379 (2011)
         """
         if verbose:
             print("Trying to calculate optimal dynamic quantizer...")
@@ -1087,16 +1090,7 @@ class DynamicQuantizer():
 
         References
         ----------
-        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
-           quantizers for discrete-valued input control;IEEE Transactions
-           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
-        .. [2]  Y. Minami, S. Azuma and T. Sugie:  An optimal dynamic quantizer
-           for feedback control with discrete-valued signal constraints;2007
-           46th IEEEConference on Decision and Control, pp.  2259–2264, IEEE
-           (2007)
-        .. [3] 南，加嶋：システムの直列分解に基づく動的量子化器設計；計測自動制御学会
-           論文集，Vol. 52, pp. 46–51(2016)
-        .. [4] R. Morita, S. Azuma, Y. Minami, & T. Sugie: Graphical design
+        .. [4] R. Morita, S. Azuma, Y. Minami and T. Sugie: Graphical design
            software for dynamic quantizers in control systems; SICE Journal 
            of Control, Measurement, and System Integration, Vol. 4, No. 5, 
            pp. 372-379 (2011)
@@ -1330,15 +1324,10 @@ class DynamicQuantizer():
 
         References
         ----------
-        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
-           quantizers for discrete-valued input control;IEEE Transactions
-           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
-        .. [2]  Y. Minami, S. Azuma and T. Sugie:  An optimal dynamic quantizer
-           for feedback control with discrete-valued signal constraints;2007
-           46th IEEEConference on Decision and Control, pp.  2259–2264, IEEE
-           (2007)
-        .. [3] 南，加嶋：システムの直列分解に基づく動的量子化器設計；計測自動制御学会
-           論文集，Vol. 52, pp. 46–51(2016)
+        .. [5] Y. Minami and T. Muromaki: Differential evolution-based
+           synthesis of dynamic quantizers with fixed-structures; International
+           Journal of Computational Intelligence and Applications, Vol. 15,
+           No. 2, 1650008 (2016)
         """  # TODO: ドキュメント更新
         # if T is None:
         #     # TODO: support infinity evaluation time
@@ -1462,15 +1451,10 @@ class DynamicQuantizer():
 
         References
         ----------
-        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
-           quantizers for discrete-valued input control;IEEE Transactions
-           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
-        .. [2]  Y. Minami, S. Azuma and T. Sugie:  An optimal dynamic quantizer
-           for feedback control with discrete-valued signal constraints;2007
-           46th IEEEConference on Decision and Control, pp.  2259–2264, IEEE
-           (2007)
-        .. [3] 南，加嶋：システムの直列分解に基づく動的量子化器設計；計測自動制御学会
-           論文集，Vol. 52, pp. 46–51(2016)
+        .. [5] Y. Minami and T. Muromaki: Differential evolution-based
+           synthesis of dynamic quantizers with fixed-structures; International
+           Journal of Computational Intelligence and Applications, Vol. 15,
+           No. 2, 1650008 (2016)
         """
         # if T is None:
         #     # TODO: support infinity evaluation time

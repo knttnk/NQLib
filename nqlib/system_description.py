@@ -63,7 +63,10 @@ class Controller(object):
 
         References
         ----------
-        .. [1] https://github.com/rmorita-jp/odqtoolbox
+        .. [5] Y. Minami and T. Muromaki: Differential evolution-based
+           synthesis of dynamic quantizers with fixed-structures; International
+           Journal of Computational Intelligence and Applications, Vol. 15,
+           No. 2, 1650008 (2016)
         """
         try:
             A_mat = matrix(A)
@@ -167,6 +170,13 @@ class Plant(object):
             P : { x(t+1) =  A x(t) + B u(t)
                 {  z(t)  = C1 x(t)
                 {  y(t)  = C2 x(t)
+                
+        References
+        ----------
+        .. [5] Y. Minami and T. Muromaki: Differential evolution-based
+           synthesis of dynamic quantizers with fixed-structures; International
+           Journal of Computational Intelligence and Applications, Vol. 15,
+           No. 2, 1650008 (2016)
         """
         try:
             A_mat = matrix(A)
@@ -309,6 +319,12 @@ class IdealSystem():
         -------
         (t, u, v, z): Tuple[np.ndarray]
             Time, input, quantized input, and output.
+
+        References
+        ----------
+        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
+           quantizers for discrete-valued input control;IEEE Transactions
+           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
         """
         # TODO: support xP_0, xK_0
         # TODO: support time
@@ -345,6 +361,12 @@ class IdealSystem():
         -------
         (t, u, z): Tuple[np.ndarray]
             Time, input, and output.
+
+        References
+        ----------
+        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
+           quantizers for discrete-valued input control;IEEE Transactions
+           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
         """
         # TODO: support xP_0, xK_0
         # TODO: support time
@@ -400,6 +422,12 @@ class IdealSystem():
             G : { x(t+1) =  A x(t) + B1 r(t) + B2 v(t)
                 {  z(t)  = C1 x(t) + D1 r(t)
                 {  u(t)  = C2 x(t) + D2 r(t)
+                
+        References
+        ----------
+        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
+           quantizers for discrete-valued input control;IEEE Transactions
+           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
         """
         try:
             A_mat = matrix(A)
@@ -497,7 +525,9 @@ class IdealSystem():
 
         References
         ----------
-        .. [1] https://github.com/rmorita-jp/odqtoolbox
+        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
+           quantizers for discrete-valued input control;IEEE Transactions
+           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
         """
         n = P.A.shape[0]
         m = P.B.shape[1]
@@ -545,7 +575,9 @@ class IdealSystem():
 
         References
         ----------
-        .. [1] https://github.com/rmorita-jp/odqtoolbox
+        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
+           quantizers for discrete-valued input control;IEEE Transactions
+           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
         """
         if P.l2 != K.p:
             raise ValueError(
@@ -610,7 +642,9 @@ class IdealSystem():
 
         References
         ----------
-        .. [1] https://github.com/rmorita-jp/odqtoolbox
+        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
+           quantizers for discrete-valued input control;IEEE Transactions
+           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
         """
         if P.m != K.m:
             raise ValueError(
@@ -684,7 +718,9 @@ class IdealSystem():
 
         References
         ----------
-        .. [1] https://github.com/rmorita-jp/odqtoolbox
+        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
+           quantizers for discrete-valued input control;IEEE Transactions
+           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
         """
         return IdealSystem.from_FB_connection_with_input_quantizer(P, K)
 
@@ -720,7 +756,9 @@ class IdealSystem():
 
         References
         ----------
-        .. [1] https://github.com/rmorita-jp/odqtoolbox
+        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
+           quantizers for discrete-valued input control;IEEE Transactions
+           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
         """
         return IdealSystem.from_FB_connection_with_output_quantizer(P, K)
 
@@ -763,6 +801,12 @@ class IdealSystem():
         -------
         float
             Estimation of E(Q) in `steptime`.
+            
+        References
+        ----------
+        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
+           quantizers for discrete-valued input control;IEEE Transactions
+           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
         """
 
         if (steptime is not None) and steptime <= 0:
@@ -836,10 +880,9 @@ class IdealSystem():
 
         References
         ----------
-        .. [1] S. Azuma, Y. Minami and T. Sugie: Optimal dynamic quantizers for feedback
-           control with discrete-level actuators: unified solution and experimental
-           evaluation; Journal of Dynamic Systems, Measurement, and Control, Vol. 133,
-           (2011)
+        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
+           quantizers for discrete-valued input control;IEEE Transactions
+           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
         """
         return self.is_stable and Q.is_stable
 
@@ -856,9 +899,8 @@ class IdealSystem():
 
         References
         ----------
-        .. [1] S. Azuma, Y. Minami and T. Sugie: Optimal dynamic quantizers for feedback
-           control with discrete-level actuators: unified solution and experimental
-           evaluation; Journal of Dynamic Systems, Measurement, and Control, Vol. 133,
-           (2011)
+        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
+           quantizers for discrete-valued input control;IEEE Transactions
+           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
         """
         return self.is_stable_with_quantizer(Q)

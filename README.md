@@ -23,11 +23,15 @@ which were developed in
 
 The algorithms used in NQLib are based on the following paper.
 
-- [1] R. Morita, S. Azuma, Y. Minami and T. Sugie: Graphical design software for dynamic quantizers in control systems; SICE Journal of Control, Measurement, and System Integration, Vol.4, pp.372–379 (2011)
+- [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic quantizers for discrete-valued input control;IEEE Transactions on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
 
-- [2] S. Azuma, Y. Minami and T. Sugie: Optimal dynamic quantizers for feedback control with discrete-level actuators: unified solution and experimental evaluation; Journal of Dynamic  Systems, Measurement, and Control, Vol. 133, (2011)
+- [2] S. Azuma, Y. Minami and T. Sugie: Optimal dynamic quantizers for feedback control with discrete-level actuators; Journal of Dynamic Systems, Measurement, and Control, Vol. 133, No. 2, 021005 (2011)
 
 - [3] 南，加嶋：システムの直列分解に基づく動的量子化器設計；計測自動制御学会論文集，Vol. 52, pp. 46–51(2016)
+
+- [4] R. Morita, S. Azuma, Y. Minami and T. Sugie: Graphical design software for dynamic quantizers in control systems; SICE Journal of Control, Measurement, and System Integration, Vol. 4, No. 5, pp. 372-379 (2011)
+
+- [5] Y. Minami and T. Muromaki: Differential evolution-based synthesis of dynamic quantizers with fixed-structures; International Journal of Computational Intelligence and Applications, Vol. 15, No. 2, 1650008 (2016)
 
 
 # License

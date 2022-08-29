@@ -124,10 +124,12 @@ class StaticQuantizer():
         """
         Quantizes the input signal `u`.
         Returns v in the following figure.
-
-            '       +-----+       '
-            ' u --->|  q  |---> v '
-            '       +-----+       '
+        
+        ```text
+               +-----+       
+         u --->|  q  |---> v 
+               +-----+       
+        ```
 
         "q" in this figure means this quantizer.
 
@@ -1571,10 +1573,12 @@ class DynamicQuantizer():
         """
         Quantizes the input signal `u`.
         Returns v in the following figure.
-
-            '       +-----+       '
-            ' u --->|  Q  |---> v '
-            '       +-----+       '
+        
+        ```text
+               +-----+       
+         u --->|  Q  |---> v 
+               +-----+       
+        ```
 
         "Q" in this figure means this quantizer.
 

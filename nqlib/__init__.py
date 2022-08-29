@@ -1,6 +1,6 @@
 from .system_description import *
 from .quantizer import *
-from cvxpy import installed_solvers  # describe in documentation
+from cvxpy import installed_solvers  # TODO: describe in documentation
 
 __all__ = [
     'IdealSystem',
@@ -8,5 +8,6 @@ __all__ = [
     'Plant',
     'StaticQuantizer',
     'DynamicQuantizer',
+    'order_reduced',
     'installed_solvers',
 ]

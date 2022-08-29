@@ -1,20 +1,30 @@
 import math
 import time
+import warnings
 from enum import Enum as _Enum
 from enum import auto as _auto
 from typing import Callable, Tuple, Union
-import warnings
 
 import control as _ctrl
+from packaging.version import Version
+
+if Version(_ctrl.__version__) >= Version("0.9.2"):
+    ctrl_poles = _ctrl.poles
+    ctrl_zeros = _ctrl.zeros
+else:
+    ctrl_poles = _ctrl.pole
+    ctrl_zeros = _ctrl.zero
+
+
 import cvxpy
 import numpy as _np
 from numpy import inf
-from scipy.special import comb as _comb
-from scipy.optimize import minimize as _minimize
 from scipy.optimize import differential_evolution as _differential_evolution
+from scipy.optimize import minimize as _minimize
+from scipy.special import comb as _comb
 
-from .linalg import block, eye, kron, matrix, norm, ones, pinv, zeros, eig_max, mpow
-
+from .linalg import (block, eig_max, eye, kron, matrix, mpow, norm, ones, pinv,
+                     zeros)
 
 _ctrl.use_numpy_matrix(False)
 __all__ = [
@@ -296,8 +306,8 @@ def _nq_serial_decomposition(system: "System",
     if verbose:
         print("Trying to calculate quantizer using serial system decomposition...")
     tf = system.P.tf1
-    zeros_ = _ctrl.zero(tf)
-    poles = _ctrl.pole(tf)
+    zeros_ = ctrl_zeros(tf)
+    poles = ctrl_poles(tf)
 
     unstable_zeros = [zero for zero in zeros_ if abs(zero) > 1]
 

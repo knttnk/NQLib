@@ -11,3 +11,4 @@ __all__ = [
     'order_reduced',
     'installed_solvers',
 ]
+__version__ = "0.3.0"

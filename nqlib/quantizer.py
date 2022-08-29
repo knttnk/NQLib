@@ -1,4 +1,3 @@
-from distutils.log import warn
 import math
 import time
 from enum import Enum as _Enum
@@ -17,11 +16,11 @@ from scipy.optimize import differential_evolution as _differential_evolution
 from .linalg import block, eye, kron, matrix, norm, ones, pinv, zeros, eig_max, mpow
 
 
-# TODO: 線形計画で解くやつの参考文献を書き忘れている
 _ctrl.use_numpy_matrix(False)
 __all__ = [
     'StaticQuantizer',
     'DynamicQuantizer',
+    'order_reduced',
 ]
 
 
@@ -33,13 +32,13 @@ class _ConnectionType(_Enum):
 
     See Also
     --------
-    nqlib.IdealSystem.from_FF()
+    nqlib.System.from_FF()
         Corresponds to `_ConnectionType.FF`.
-    nqlib.IdealSystem.from_FB_connection_with_input_quantizer()
+    nqlib.System.from_FB_connection_with_input_quantizer()
         Corresponds to `_ConnectionType.FB_WITH_INPUT_QUANTIZER`.
-    nqlib.IdealSystem.from_FB_connection_with_output_quantizer()
+    nqlib.System.from_FB_connection_with_output_quantizer()
         Corresponds to `_ConnectionType.FB_WITH_OUTPUT_QUANTIZER`.
-    nqlib.IdealSystem()
+    nqlib.System()
         Corresponds to `_ConnectionType.ELSE`.
     """
     FF = _auto()
@@ -107,7 +106,30 @@ class StaticQuantizer():
 
     def __call__(self, u):
         """
-        Calls `self._function`.
+        Calls `self.quantize`.
+        """
+        return self.quantize(u)
+
+    def quantize(self, u):
+        """
+        Quantizes the input signal `u`.
+        Returns v in the following figure.
+
+            '       +-----+       '
+            ' u --->|  q  |---> v '
+            '       +-----+       '
+
+        "q" in this figure means this quantizer.
+
+        Parameters
+        ----------
+        u : array_like
+            Input signal.
+
+        Returns
+        -------
+        v : np.ndarray
+            Quantized signal.
         """
         return self._function(u)
 
@@ -251,7 +273,7 @@ def _find_tau(A_tilde, C_1, B_2, l: int, tau_max: int) -> int:
     return -1
 
 
-def _nq_serial_decomposition(system: "IdealSystem",
+def _nq_serial_decomposition(system: "System",
                              q: StaticQuantizer,
                              verbose: bool) -> Tuple["DynamicQuantizer", float]:
     """
@@ -260,7 +282,7 @@ def _nq_serial_decomposition(system: "IdealSystem",
 
     Parameters
     ----------
-    system : IdealSystem
+    system : System
     q : StaticQuantizer
     T : int
     gain_wv : float
@@ -367,7 +389,7 @@ def _SVD_from(x: _np.ndarray,
     return H, Wo, S, Wc
 
 
-def _compose_Q_from_SVD(system: "IdealSystem",
+def _compose_Q_from_SVD(system: "System",
                         q: StaticQuantizer,
                         T: int,
                         H: _np.ndarray,
@@ -378,7 +400,7 @@ def _compose_Q_from_SVD(system: "IdealSystem",
     """
     Parameters
     ----------
-    system : IdealSystem
+    system : System
     q : StaticQuantizer
     T : int
         Must be an odd number.
@@ -564,7 +586,7 @@ class DynamicQuantizer():
         return ret
 
     def _objective_function(self,
-                            system: "IdealSystem",
+                            system: "System",
                             *,
                             T: int = None,  # TODO: これより下を反映
                             gain_wv: float = inf) -> float:
@@ -573,7 +595,7 @@ class DynamicQuantizer():
 
         Parameters
         ----------
-        system : IdealSystem
+        system : System
             Must be stable and SISO.
         T : int, None or numpy.inf, optional
             Estimation time. Must be greater than `0`.
@@ -597,7 +619,7 @@ class DynamicQuantizer():
         #     # TODO: support infinity evaluation time
         #     return None, inf
         if system.m != 1:
-            raise ValueError("`design_GB` and `design_DE` is currently supported for SISO systems only.")
+            raise ValueError("`design_GD` and `design_DE` is currently supported for SISO systems only.")
 
         # Values representing the stability or gain_wv.y
         # if max(constraint_values) < 0, this quantizer satisfies the
@@ -614,10 +636,7 @@ class DynamicQuantizer():
         else:
             return max_v
 
-    def order_reduced(
-        self,
-        dim,
-    ) -> "DynamicQuantizer":
+    def order_reduced(self, dim) -> "DynamicQuantizer":
         """
         Returns the quantizer with its order reduced.
 
@@ -708,7 +727,7 @@ class DynamicQuantizer():
                                 self.q)
 
     @staticmethod
-    def design_try_all(system: "IdealSystem",
+    def design(system: "System",
                        *,
                        q: StaticQuantizer,
                        T: int = None,
@@ -726,7 +745,7 @@ class DynamicQuantizer():
 
         Parameters
         ----------
-        system : IdealSystem
+        system : System
             Must be stable.
         q : StaticQuantizer
             Returned dynamic quantizer contains this static quantizer.
@@ -804,9 +823,9 @@ class DynamicQuantizer():
         # TODO: 引数とドキュメントを見直す
         # TODO: 最小実現する
         # check system
-        if system.__class__.__name__ != "IdealSystem":
+        if system.__class__.__name__ != "System":
             raise TypeError(
-                '`system` must be an instance of `nqlib.IdealSystem`.'
+                '`system` must be an instance of `nqlib.System`.'
             )
         elif not system.is_stable:
             raise ValueError(
@@ -832,9 +851,9 @@ class DynamicQuantizer():
         elif dim < 1:
             raise ValueError('`dim` must be greater than `0`.')
 
-        # analytically optimize
+        # algebraically optimize
         if use_analytical_method:
-            Q, E = DynamicQuantizer.design_AN(
+            Q, E = DynamicQuantizer.design_AG(
                 system,
                 q=q,
                 dim=dim,
@@ -866,7 +885,7 @@ class DynamicQuantizer():
         if dim is None or dim == inf:
             dim = system.n
         if use_design_GB_method and isinstance(dim, int):
-            Q, E = DynamicQuantizer.design_GB(
+            Q, E = DynamicQuantizer.design_GD(
                 system,
                 q=q,
                 dim=dim,
@@ -911,7 +930,7 @@ class DynamicQuantizer():
             return None, inf
 
     @staticmethod
-    def design_AN(system: "IdealSystem",
+    def design_AG(system: "System",
                   *,
                   q: StaticQuantizer,
                   dim: int = inf,
@@ -919,7 +938,7 @@ class DynamicQuantizer():
                   verbose: bool = False) -> Tuple["DynamicQuantizer", float]:
         """
         Finds the stable and optimal dynamic quantizer for `system`
-        analytically[2]_,[3]_.
+        algebraically[2]_,[3]_.
         Returns `(Q, E)`. `E` is the estimation of E(Q)[1]_,[2]_,[3]_.
 
         If NQLib couldn't find `Q` such that
@@ -934,7 +953,7 @@ class DynamicQuantizer():
 
         Parameters
         ----------
-        system : IdealSystem
+        system : System
             Must be stable and SISO.
         q : StaticQuantizer
             Returned dynamic quantizer contains this static quantizer.
@@ -984,7 +1003,7 @@ class DynamicQuantizer():
 
             if tau == -1:
                 if verbose:
-                    print("Couldn't calculate optimal dynamic quantizer analytically. Trying other method...")
+                    print("Couldn't calculate optimal dynamic quantizer algebraically. Trying other method...")
                 return None, inf
 
             Q = DynamicQuantizer(
@@ -1027,7 +1046,7 @@ class DynamicQuantizer():
             return None, inf
 
     @staticmethod
-    def design_LP(system: "IdealSystem",
+    def design_LP(system: "System",
                   *,
                   q: StaticQuantizer,
                   dim: int = inf,
@@ -1054,7 +1073,7 @@ class DynamicQuantizer():
 
         Parameters
         ----------
-        system : IdealSystem
+        system : System
             Must be stable and SISO.
         q : StaticQuantizer
             Returned dynamic quantizer contains this static quantizer.
@@ -1265,7 +1284,7 @@ class DynamicQuantizer():
         return Q, E
 
     @staticmethod
-    def design_GB(system: "IdealSystem",
+    def design_GD(system: "System",
                   *,
                   q: StaticQuantizer,
                   dim: int,
@@ -1289,7 +1308,7 @@ class DynamicQuantizer():
 
         Parameters
         ----------
-        system : IdealSystem
+        system : System
             Must be stable and SISO.
         q : StaticQuantizer
             Returned dynamic quantizer contains this static quantizer.
@@ -1408,7 +1427,7 @@ class DynamicQuantizer():
         return Q, E
 
     @staticmethod
-    def design_DE(system: "IdealSystem",
+    def design_DE(system: "System",
                   *,
                   q: StaticQuantizer,
                   dim: int,
@@ -1421,7 +1440,7 @@ class DynamicQuantizer():
 
         Parameters
         ----------
-        system : IdealSystem
+        system : System
             Must be stable and SISO.
         q : StaticQuantizer
             Returned dynamic quantizer contains this static quantizer.
@@ -1570,3 +1589,77 @@ class DynamicQuantizer():
             if i < length - 1:
                 xi[:, i:i + 1 + 1] = matrix(self.A @ xi[:, i:i + 1] + self.B @ (v[:, i:i + 1] - u[:, i:i + 1]))
         return v
+
+    def cost(self,
+             system: "System",
+             steptime: Union[int, None] = None,
+             _check_stability: bool = True) -> float:
+        """
+        Returns estimation of E(Q), where Q is this dynamic quantizer.
+
+        Parameters
+        ----------
+        system : System
+            The system to insert this dynamic quantizer.
+        steptime : int or None, optional
+            Evaluation time. Must be a natural number.
+            (The default is `None`, which implies that this function
+            calculates until convergence.)
+        _check_stability : bool, optional
+            This shouldn't be changed.
+            `(steptime is not None or _check_stability)` must be `True`.
+            (The default is `True`.)
+
+        Returns
+        -------
+        float
+            Estimation of E(Q) in `steptime`.
+
+        References
+        ----------
+        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
+           quantizers for discrete-valued input control;IEEE Transactions
+           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
+        """
+        return system.E(self, steptime, _check_stability)
+
+
+def order_reduced(Q: DynamicQuantizer, dim: int) -> DynamicQuantizer:
+    """
+    Returns the quantizer with its order reduced.
+
+    Note that the quantizer with the reduced order
+    will generally have larger `E(Q)` and a larger
+    `gain_wv` than those of the original quantizer. 
+    You should check the performance and gain yourself.
+
+    This function requires slycot. Please install it.
+
+    Parameters
+    ----------
+    Q : DynamicQuantizer
+        The quantizer you want to reduce the order of.
+    dim : int
+        Order of the quantizer to be returned.
+        Must be greater than `0` and less than `self.N`.
+
+    Returns
+    -------
+    Q : DynamicQuantizer
+
+    Raises
+    ------
+    ImportError
+        if NQLib couldn't import slycot.
+    """
+    # check Q
+    if type(Q) is not DynamicQuantizer:
+        raise TypeError(
+            '`Q` must be an instance of `nqlib.DynamicQuantizer`.'
+        )
+    # check dim
+    if not isinstance(dim, int):
+        raise TypeError("`dim` must be an instance of `int`.")
+    elif dim < 1:
+        raise ValueError('`dim` must be greater than `0`.')
+    return Q.order_reduced(dim)

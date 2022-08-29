@@ -12,7 +12,7 @@ from .quantizer import _ConnectionType
 
 _ctrl.use_numpy_matrix(False)
 __all__ = [
-    'IdealSystem',
+    'System',
     'Controller',
     'Plant',
 ]
@@ -32,7 +32,7 @@ class Controller(object):
     def __init__(self, A, B1, B2, C, D1, D2):
         """
         Initializes an instance of `Controller`. You can create an
-        instance of `IdealSystem` with `Controller`[1]_.
+        instance of `System` with `Controller`[1]_.
 
         Parameters
         ----------
@@ -145,7 +145,7 @@ class Plant(object):
     def __init__(self, A, B, C1, C2):
         """
         Initializes an instance of `Plant`. You can create an
-        instance of `IdealSystem` with `Plant`.
+        instance of `System` with `Plant`.
 
         Parameters
         ----------
@@ -264,7 +264,7 @@ class Plant(object):
         return ret
 
 
-class IdealSystem():
+class System():
     """
     Represents ideal system. 'Ideal' means that this system doesn't
     contain a quantizer.
@@ -326,6 +326,12 @@ class IdealSystem():
            quantizers for discrete-valued input control;IEEE Transactions
            on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
         """
+        if type(quantizer) is _StaticQuantizer:
+            quantizer = _DynamicQuantizer(
+                zeros((1, 1)),  zeros((1, self.m)),
+                zeros((self.m, 1)),
+                q=quantizer,
+            )
         # TODO: support xP_0, xK_0
         # TODO: support time
         r = matrix(input)
@@ -390,7 +396,7 @@ class IdealSystem():
 
     def __init__(self, A, B1, B2, C1, C2, D1, D2):
         """
-        Initializes an instance of `IdealSystem`. 'Ideal' means that
+        Initializes an instance of `System`. 'Ideal' means that
         this system doesn't contain a quantizer.
 
         Parameters
@@ -416,7 +422,7 @@ class IdealSystem():
 
         Notes
         -----
-        An instance of `IdealSystem` represents ideal system
+        An instance of `System` represents ideal system
         G given by
 
             G : { x(t+1) =  A x(t) + B1 r(t) + B2 v(t)
@@ -505,9 +511,9 @@ class IdealSystem():
         self.K = None
 
     @staticmethod
-    def from_FF(P: Plant) -> "IdealSystem":
+    def from_FF(P: Plant) -> "System":
         """
-        Creates an instance of `IdealSystem` from plant `P`.
+        Creates an instance of `System` from plant `P`.
         'from_FF' means that a quantizer is inserted as shown in the
         following figure[1]_.
 
@@ -521,7 +527,7 @@ class IdealSystem():
 
         Returns
         -------
-        IdealSystem
+        System
 
         References
         ----------
@@ -533,7 +539,7 @@ class IdealSystem():
         m = P.B.shape[1]
         l = P.C1.shape[0]
 
-        ret = IdealSystem(
+        ret = System(
             A=P.A,
             B1=zeros(shape=(n, m)),
             B2=P.B,
@@ -550,9 +556,9 @@ class IdealSystem():
     def from_FB_connection_with_input_quantizer(
         P: Plant,
         K: Controller
-    ) -> "IdealSystem":
+    ) -> "System":
         """
-        Creates an instance of `IdealSystem` from plant `P` and
+        Creates an instance of `System` from plant `P` and
         controller `K`.
         'from_FB_connection_with_input_quantizer' means that a
         quantizer is inserted as shown in the following figure[1]_.
@@ -571,7 +577,7 @@ class IdealSystem():
 
         Returns
         -------
-        IdealSystem
+        System
 
         References
         ----------
@@ -606,7 +612,7 @@ class IdealSystem():
         D1 = zeros(shape=(C1.shape[0], B1.shape[1]))
         D2 = K.D1
 
-        ret = IdealSystem(A, B1, B2, C1, C2, D1, D2)
+        ret = System(A, B1, B2, C1, C2, D1, D2)
         ret.type = _ConnectionType.FB_WITH_INPUT_QUANTIZER
         ret.P = P
         ret.K = K
@@ -616,9 +622,9 @@ class IdealSystem():
     def from_FB_connection_with_output_quantizer(
         P: Plant,
         K: Controller
-    ) -> "IdealSystem":
+    ) -> "System":
         """
-        Creates an instance of `IdealSystem` from plant `P` and
+        Creates an instance of `System` from plant `P` and
         controller `K`.
         'from_FB_connection_with_output_quantizer' means that a
         quantizer is inserted as shown in the following figure[1]_.
@@ -638,7 +644,7 @@ class IdealSystem():
 
         Returns
         -------
-        IdealSystem
+        System
 
         References
         ----------
@@ -673,7 +679,7 @@ class IdealSystem():
         D1 = zeros(shape=(C1.shape[0], B1.shape[1]))
         D2 = zeros(shape=(B2.shape[1], B1.shape[1]))
 
-        ret = IdealSystem(
+        ret = System(
             A,
             B1,
             B2,
@@ -691,11 +697,11 @@ class IdealSystem():
     def from_FBIQ(
         P: Plant,
         K: Controller
-    ) -> "IdealSystem":
+    ) -> "System":
         """
         A shortened form of `from_FB_connection_with_input_quantizer`.
 
-        Creates an instance of `IdealSystem` from plant `P` and
+        Creates an instance of `System` from plant `P` and
         controller `K`.
         'from_FB_connection_with_input_quantizer' means that a
         quantizer is inserted as shown in the following figure[1]_.
@@ -714,7 +720,7 @@ class IdealSystem():
 
         Returns
         -------
-        IdealSystem
+        System
 
         References
         ----------
@@ -722,17 +728,17 @@ class IdealSystem():
            quantizers for discrete-valued input control;IEEE Transactions
            on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
         """
-        return IdealSystem.from_FB_connection_with_input_quantizer(P, K)
+        return System.from_FB_connection_with_input_quantizer(P, K)
 
     @staticmethod
     def from_FBOQ(
         P: Plant,
         K: Controller
-    ) -> "IdealSystem":
+    ) -> "System":
         """
         A shortened form of `from_FB_connection_with_output_quantizer`.
 
-        Creates an instance of `IdealSystem` from plant `P` and
+        Creates an instance of `System` from plant `P` and
         controller `K`.
         'from_FB_connection_with_output_quantizer' means that a
         quantizer is inserted as shown in the following figure[1]_.
@@ -752,7 +758,7 @@ class IdealSystem():
 
         Returns
         -------
-        IdealSystem
+        System
 
         References
         ----------
@@ -760,7 +766,7 @@ class IdealSystem():
            quantizers for discrete-valued input control;IEEE Transactions
            on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
         """
-        return IdealSystem.from_FB_connection_with_output_quantizer(P, K)
+        return System.from_FB_connection_with_output_quantizer(P, K)
 
     @property
     def is_stable(self) -> bool:

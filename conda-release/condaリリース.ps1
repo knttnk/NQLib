@@ -1,12 +1,15 @@
 # https://note.yu9824.com/howto/2022/05/07/conda-package-release.html
 # https://zenn.dev/akikuno/articles/c216cae0e4e0f6
+
+# オフィシャルガイド
+# https://conda-forge.org/docs/maintainer/00_intro.html
 conda activate base
 conda install conda-build
 conda install -c conda-forge grayskull
 
 cd H:\マイドライブ\IshikawaMinamiLab\研究\NQLib\conda-release
 conda skeleton pypi nqlib
-# grayskull pypi nqlib  # 失敗したときはこれを試してみる
+# grayskull pypi nqlib  # 前回のマージでこれを使うべきだと言われた．
 
 git clone https://github.com/knttnk/staged-recipes.git
 

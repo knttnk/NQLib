@@ -11,8 +11,9 @@
 # ./create_env.ps1
 # を実行
 conda install python numpy scipy sympy matplotlib autopep8 mypy selenium ipykernel jupyter notebook -y
-conda install control nqlib slycot -c conda-forge -y
-python -m ipykernel install --name nqlib
+conda install slycot -c conda-forge -y
+pip install control nqlib
+python -m ipykernel install --name nqlib 
 jupyter kernelspec list
 
 # conda install -c conda-forge jupyterlab

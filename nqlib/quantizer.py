@@ -94,7 +94,7 @@ class StaticQuantizer():
             raise TypeError('`function` must be a callable object.')
         else:
             if error_on_excess:
-                def new_function(u):
+                def safe_function(u):
                     # returns function(u)
                     v = function(u)
                     if _np.max(abs(v - u)) > delta:
@@ -110,9 +110,23 @@ class StaticQuantizer():
                         )
                     else:
                         return v
-                self._function = new_function
+                self._function = safe_function
             else:
                 self._function = function
+
+    def __str__(self):
+        return f"q(*; delta={self.delta})"
+
+    def __repr__(self):
+        return (
+            f"{type(self).__name__}(\n"
+            f"  {self._function},\n"
+            f"  {self.delta},\n"
+            f")"
+        )
+
+    def _repr_latex_(self):
+        return r"$$q(*;\ " + f"\Delta={self.delta}" + ")$$"
 
     def __call__(self, u):
         """
@@ -547,6 +561,77 @@ class DynamicQuantizer():
         self.delta = q.delta
         self.gain_uv = 1.0
 
+    def _matrix_str(self,
+                    index: int,
+                    formatter=lambda n: f"{n}",
+                    sep: str = ", ",
+                    linesep="\n",
+                    indent=""):
+        """
+        Returns the formatted string of DynamicQuantizer.
+
+        Args:
+            index (int): 0, 1 and 2 represents A, B and C, respectively.
+            sep (str, optional): Defaults to ",".
+            linesep (str, optional): Defaults to "\n,".
+        """
+        mat = [self.A, self.B, self.C][index]
+        ret = ""
+        rows = mat.shape[0]
+        cols = mat.shape[1]
+        for r in range(rows):
+            ret += indent
+            for c in range(cols):
+                ret += formatter(mat[r, c])
+                if c < cols - 1:
+                    ret += sep
+            if r < rows - 1:
+                ret += linesep
+        return ret
+
+    def _str(self, q_str):
+        n_indents = 2
+        linesep = "],\n"
+        indent = " " * (n_indents + 1) + "["
+        matrix_strs = [f"{self._matrix_str(i, linesep=linesep, indent=indent)}]],\n" for i in range(3)]
+        matrix_strs = [s[:n_indents] + "[" + s[n_indents + 1:] for s in matrix_strs]
+        return (
+            f"{type(self).__name__}(\n" +
+            matrix_strs[0] + matrix_strs[1] + matrix_strs[2] +
+            " " * n_indents + f"{q_str},\n" +
+            f")"
+        )
+
+    def __str__(self):
+        n_indents = 2
+        return self._str(str(self.q).replace("\n", "\n" + " " * n_indents))
+
+    def __repr__(self):
+        n_indents = 2
+        return self._str(repr(self.q).replace("\n", "\n" + " " * n_indents))
+
+    def _repr_latex_(self):
+        n_indents = 2
+        matrix_strs = [
+            self._matrix_str(i,
+                             sep=" & ",
+                             linesep=" \\\\ \n",
+                             indent=" " * n_indents * 2) + "\n"
+            for i in range(3)
+        ]
+        return (
+            r"$$\begin{cases}\begin{aligned}" + "\n" +
+            r"  \xi(k+1) & =\begin{bmatrix}" + "\n" +
+            matrix_strs[0] + "\n" +
+            r"  \end{bmatrix} \xi(k) + \begin{bmatrix}" + "\n" +
+            matrix_strs[1] + "\n" +
+            r"  \end{bmatrix} u(k), \\" + "\n" +
+            r"  v(k) & =q\left(\begin{bmatrix}" + "\n" +
+            matrix_strs[2] + "\n" +
+            r"  \end{bmatrix} \xi(k) + u(k);\ \ \Delta="+ f"{self.q.delta}" + r"\right)." + "\n" +
+            r"\end{aligned}\end{cases}$$"
+        )
+
     def gain_wv(self, steptime: Union[None, int, float] = None) -> float:
         """
         Computes the gain u->v and w->v of this `DynamicQuantizer` in
@@ -601,7 +686,8 @@ class DynamicQuantizer():
                             system: "System",
                             *,
                             T: int = None,  # TODO: これより下を反映
-                            gain_wv: float = inf) -> float:
+                            gain_wv: float = inf,
+                            obj_type=["exp", "atan", "1.1", "100*1.1"][0]) -> float:
         """
         Used in numerical optimization.
 
@@ -644,7 +730,15 @@ class DynamicQuantizer():
 
         max_v = max(constraint_values)
         if max_v < 0:
-            return - 1.1 ** (- system.E(self))
+            types = ["exp", "atan", "1.1", "100*1.1"]
+            if obj_type == types[0]:
+                return - _np.exp(- system.E(self))
+            if obj_type == types[1]:
+                return _np.arctan(system.E(self)) - _np.pi/2
+            if obj_type == types[2]:
+                return - 1.1 ** (- system.E(self))
+            if obj_type == types[3]:
+                return - 10000*_np.exp(- 0.01*system.E(self))
         else:
             return max_v
 
@@ -1303,7 +1397,8 @@ class DynamicQuantizer():
                   T: int = None,  # TODO: これより下を反映
                   gain_wv: float = inf,
                   verbose: bool = False,
-                  method: str = "SLSQP") -> Tuple["DynamicQuantizer", float]:
+                  method: str = "SLSQP",
+                  obj_type = ["exp", "atan", "1.1", "100*1.1"][0]) -> Tuple["DynamicQuantizer", float]:
         """
         Finds the stable and optimal dynamic quantizer `Q` for `system`.
         Returns `(Q, E)`. `E` is the estimation of E(Q)[1]_,[2]_,[3]_.
@@ -1404,7 +1499,8 @@ class DynamicQuantizer():
         def obj(x):
             return _Q(x)._objective_function(system,
                                              T=T,
-                                             gain_wv=gain_wv)
+                                             gain_wv=gain_wv,
+                                             obj_type=obj_type)
 
         # optimize
         if verbose:
@@ -1636,6 +1732,34 @@ class DynamicQuantizer():
            on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
         """
         return system.E(self, steptime, _check_stability)
+
+    def spec(self,
+             steptime: Union[int, None] = None,
+             show: bool=True) -> float:
+        """
+        Prints the specs of this DynamicQuantizer.
+
+        Parameters
+        ----------
+        steptime : int or None, optional
+            Evaluation time to compute the gain. Must be a natural number.
+            (The default is `None`, which implies that this function
+            calculates until convergence.)
+        print : bool, optional
+            Whether to print or only return the string.
+
+        Returns
+        -------
+        str
+            Printed string.
+        """
+        s = "The specs of \n"
+        s += str(self) + "\n"
+        s += f"order    : {self.N}\n"
+        s += f"stability: {'stable' if self.is_stable else 'unstable'}\n"
+        s += f"gain_wv  : {self.gain_wv(steptime)}\n"
+        show and print(s)
+        return s
 
 
 def order_reduced(Q: DynamicQuantizer, dim: int) -> DynamicQuantizer:

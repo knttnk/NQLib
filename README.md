@@ -11,10 +11,16 @@ See
 <a href="https://colab.research.google.com/drive/1Ui-XqaTZCjwqRXC3ZeMeMCbPqGxK9YXO" target="_blank">here</a>.
 
 # **Install**
-You can install NQLib by using `pip`.
+You can install NQLib by using pip
 ```
 pip install nqlib
 ```
+
+or conda.
+```
+conda install -c conda-forge nqlib
+```
+
 # **References**
 NQLib is a Python library version of
 <a href="https://github.com/rmorita-jp/odqtoolbox" target="_blank">ODQ Toolbox</a>,

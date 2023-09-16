@@ -18,8 +18,8 @@ def block(M) -> np.ndarray:
     return matrix(np.block(M))
 
 
-def eye(N, M=None) -> np.ndarray:
-    return matrix(np.eye(N, M))
+def eye(N, M=None, k=0) -> np.ndarray:
+    return matrix(np.eye(N, M, k=k))
 
 
 def norm(A: np.ndarray) -> float:

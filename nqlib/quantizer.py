@@ -3,7 +3,7 @@ import time
 import warnings
 from enum import Enum as _Enum
 from enum import auto as _auto
-from typing import Callable, Tuple, Union
+from typing import Callable, Tuple, Union, List
 
 import control as _ctrl
 from packaging.version import Version
@@ -126,7 +126,7 @@ class StaticQuantizer():
         )
 
     def _repr_latex_(self):
-        return r"$$q(*;\ " + f"\Delta={self.delta}" + ")$$"
+        return r"$$q(*;\ " + f"\\Delta={self.delta}" + ")$$"
 
     def __call__(self, u):
         """
@@ -287,7 +287,7 @@ def _find_tau(A_tilde, C_1, B_2, l: int, tau_max: int) -> int:
         `tau`. If `tau` doesn't exist, returns `-1`.
     """
     def is_not_zero(M):
-        return M * 0 != M
+        return (M * 0 != M).all()
 
     for t in range(tau_max):
         M = C_1 @ mpow(A_tilde, t) @ B_2
@@ -377,38 +377,35 @@ def _nq_serial_decomposition(system: "System",
     return Q, E
 
 
-def _SVD_from(x: _np.ndarray,
-              T: int,
-              m: int,
-              p: int) -> _np.ndarray:
+def _SVD_from(H2: List[_np.ndarray],
+              T: int) -> _np.ndarray:
     T_dash = math.floor(T / 2) + 1
 
-    H_2 = []  # make list of H*_2i (block Hankel matrix)
-    for t in range(T):
-        H_2.append(
-            block([
-                [x[1 + (t * m + row) * m:1 + (t * m + row + 1) * m, :].T for row in range(m)],
-            ])
-        )
+    if T % 2 == 0:
+        H2 = H2 + [_np.zeros_like(H2[0])]
 
-    # make Hankel matrix
-    try:
-        H = block([
-            H_2[row:row + T_dash] for row in range(T_dash)
-        ])
-    except:
-        # TODO: rewrite
-        H = [H_2[row:row + T_dash] for row in range(T_dash)]
-        H[-1].append(H[-1][0] * 0)
-        H = block(H)
+    # H⚫
+    # [H2_0     , H2_1     , H2_2     , ...      , H2_T_dash;
+    #  H2_1     , H2_2     , ...      ,          ,     :
+    #  H2_2     , ...      ,          ,                :
+    #   :
+    #   :
+    #  H2_T_dash, ...      ,          , ...      , H2_2T_dash(or 0)]
+    H_list = [
+        [H2[r + c] for c in range(T_dash)]
+        for r in range(T_dash)
+    ]
+    H = block(H_list)
 
     # singular value decomposition
     # find Wo, S, Wc, with which it becomes H = Wo S Wc
-    Wo, S, Wc = _np.linalg.svd(H)
+    Wo, S_vector, Wc = _np.linalg.svd(H)
+
     Wo = matrix(Wo)
-    S = matrix(_np.diag(S))
+    S = matrix(_np.diag(S_vector))
     Wc = matrix(Wc)
 
+    # if norm(H - Wo @ S @ Wc) / norm(H) > 0.01:
     if norm(H - Wo @ S @ Wc) / norm(H) > 0.01:
         raise ValueError('SVD failed. Try another method.')
 
@@ -454,27 +451,19 @@ def _compose_Q_from_SVD(system: "System",
         nQ = m * T_dash
 
     # reduce order
-    Wo_reduced = Wo[:, :nQ]
+    Wo_reduced = Wo[0:, :nQ]
     S_reduced = S[:nQ, :nQ]
-    Wc_reduced = Wc[:nQ, :]
+    Wc_reduced = Wc[:nQ, 0:]
     # H_reduced = Wo_reduced @ S_reduced @ Wc_reduced
 
     # compose Q
     S_r_sqrt = mpow(S_reduced, 1 / 2)
-    B2 = S_r_sqrt @ Wc_reduced @ block([
-        [eye(m)],
-        [zeros((m * (T_dash - 1), m))],
-    ])
-    C = block([
-        [eye(m), zeros((m, m * (T_dash - 1)))]
-    ]) @ Wo_reduced @ S_r_sqrt
-    A = pinv(
-        block([
-            [eye(m * (T_dash - 1)), zeros((m * (T_dash - 1), m))]
-        ]) @ Wo_reduced @ S_r_sqrt
-    ) @ block([
-        [zeros((m * (T_dash - 1), m)), eye(m * (T_dash - 1))]
-    ]) @ Wo_reduced @ S_r_sqrt - B2 @ C
+    B2 = S_r_sqrt @ Wc_reduced @ eye(m * T_dash, m)
+    C = eye(m, m * T_dash) @ Wo_reduced @ S_r_sqrt
+    _P = pinv(
+        eye(m * (T_dash - 1), m * T_dash) @ Wo_reduced @ S_r_sqrt
+    )
+    A = _P @ eye(m * (T_dash - 1), m * T_dash, k=m) @ Wo_reduced @ S_r_sqrt - B2 @ C
 
     # check stability
     Q = DynamicQuantizer(A, B2, C, q)
@@ -628,7 +617,7 @@ class DynamicQuantizer():
             r"  \end{bmatrix} u(k), \\" + "\n" +
             r"  v(k) & =q\left(\begin{bmatrix}" + "\n" +
             matrix_strs[2] + "\n" +
-            r"  \end{bmatrix} \xi(k) + u(k);\ \ \Delta="+ f"{self.q.delta}" + r"\right)." + "\n" +
+            r"  \end{bmatrix} \xi(k) + u(k);\ \ \Delta=" + f"{self.q.delta}" + r"\right)." + "\n" +
             r"\end{aligned}\end{cases}$$"
         )
 
@@ -734,11 +723,11 @@ class DynamicQuantizer():
             if obj_type == types[0]:
                 return - _np.exp(- system.E(self))
             if obj_type == types[1]:
-                return _np.arctan(system.E(self)) - _np.pi/2
+                return _np.arctan(system.E(self)) - _np.pi / 2
             if obj_type == types[2]:
                 return - 1.1 ** (- system.E(self))
             if obj_type == types[3]:
-                return - 10000*_np.exp(- 0.01*system.E(self))
+                return - 10000 * _np.exp(- 0.01 * system.E(self))
         else:
             return max_v
 
@@ -844,7 +833,7 @@ class DynamicQuantizer():
                        use_LP_method=True,
                        use_design_GB_method=True,
                        use_DE_method=False,
-                       solver: str = "") -> Tuple["DynamicQuantizer", float]:
+                       solver: str = None) -> Tuple["DynamicQuantizer", float]:
         """
         Calculates the stable and optimal dynamic quantizer `Q` for `system`.
         Returns `(Q, E)`. `E` is the estimation of E(Q)[1]_,[2]_,[3]_.
@@ -871,7 +860,7 @@ class DynamicQuantizer():
         solver : str, optional
             Name of CVXPY solver. You can check the available solvers by
             `nqlib.installed_solvers()`.
-            (The default is `""`, which implies that this function doesn't
+            (The default is `None`, which implies that this function doesn't
             specify the solver).
 
         Returns
@@ -1158,7 +1147,7 @@ class DynamicQuantizer():
                   dim: int = inf,
                   T: int = None,
                   gain_wv: float = inf,
-                  solver: str = "",
+                  solver: str = None,
                   verbose: bool = False) -> Tuple["DynamicQuantizer", float]:
         """
         Finds the stable and optimal dynamic quantizer for `system`
@@ -1196,7 +1185,7 @@ class DynamicQuantizer():
         solver : str, optional
             Name of CVXPY solver. You can check the available solvers by
             `nqlib.installed_solvers()`.
-            (The default is `""`, which implies that this function doesn't
+            (The default is `None`, which implies that this function doesn't
             specify the solver).
         verbose : bool, optional
             Whether to print the details.
@@ -1257,98 +1246,109 @@ class DynamicQuantizer():
             m = system.m
             p = system.l
 
-            A_tilde = system.A + system.B2 @ system.C2
+            # Reference:
+            # Synthesis of Optimal Dynamic Quantizers for Discrete-Valued Input Control
 
-            if gain_wv == inf:
-                f = zeros((1 + m**2 * T + p * m * (T - 1), 1))
-            else:
-                f = zeros((1 + 2 * m**2 * T + p * m * (T - 1), 1))
-            f[0, 0] = 1
+            C = system.C1
+            A = system.A + system.B2 @ system.C2
+            B = system.B2
 
-            # compose Phi
-            Phi = zeros((m * p * (T - 1), m * m * T))
-            for i in range(1, T):
-                Phi_dash = kron(
-                    system.C1 @ mpow(A_tilde, i - 1) @ system.B2, eye(m)
+            ############################################################################
+            # OP4
+            ############################################################################
+            # variables
+            G = cvxpy.Variable(1, name="G")  # The variable to minimize
+            H2 = [
+                cvxpy.Variable(
+                    (m, m),
+                    name=f"H2_{k}"
+                ) for k in range(T)  # H2_0, ..., H2_(T-1)
+            ]
+            H2_bar = [
+                cvxpy.Variable(
+                    (m, m),
+                    name=f"H2_bar_{k}"
+                ) for k in range(T)  # H2_bar_0, ..., H2_bar_(T-1)
+            ]
+            Epsilon_bar = [
+                cvxpy.Variable(
+                    (p, m),
+                    name=f"ε_bar_{k}"
+                ) for k in range(1, T)  # ε_bar_1, ..., ε_bar_(T-1)
+            ]
+
+            # # Phi
+            # [
+            #     [CB        ],  # Phi_1
+            #     [CAB       CB        ],
+            #        :
+            #     [CA^(k-1)B ...       CA^(i)B ...        CB        ],
+            #        :
+            #     [CA^(T-2)B ...       CA^(i)B ...        CB        ],
+            # ]
+            Phi = [
+                _np.zeros((p, m * k))
+                for k in range(1, T)  # Phi_1, ..., Phi_(T-1)
+            ]
+            CA_i = C  # C @ A^i
+            for i in range(0, T - 1):
+                for k in range(i + 1, T):
+                    Phi[k - 1][0:p, (k - i - 1) * m:(k - i) * m] = CA_i @ B
+                CA_i = CA_i @ A
+
+            one_m = _np.ones((m, 1))
+            one_p = _np.ones((p, 1))
+
+            # compose a problem
+            constraints = [
+                (_np.abs(C @ B) + sum(Epsilon_bar)) @ one_m <= one_p @ G,
+                *[
+                    -Epsilon_bar[k - 1] <= C @ mpow(A, k) @ B + Phi[k - 1] @ cvxpy.vstack(H2[0:k])
+                    for k in range(1, T)
+                ],
+                *[
+                    Epsilon_bar[k - 1] >= C @ mpow(A, k) @ B + Phi[k - 1] @ cvxpy.vstack(H2[0:k])
+                    for k in range(1, T)
+                ],
+                *[
+                    -H2_bar[k] <= H2[k]
+                    for k in range(T)
+                ],
+                *[
+                    H2[k] <= H2_bar[k]
+                    for k in range(T)
+                ],
+            ]
+            if gain_wv < inf:
+                constraints.append(
+                    (_np.eye(m) + sum(H2_bar)) @ one_m <= gain_wv * one_m
                 )
-                for j in range(i, T):   # TODO: Any easier way?
-                    Phi[(j - 1) * m * p: j * m * p, (j - i) * m * m: (j - i + 1) * m * m] = Phi_dash
 
-            # making 'matrix -> vector' transposer
-            eye_sumE = kron(
-                ones((1, m * (T - 1))), eye(p)
-            )
-            eye_sumH = kron(
-                ones((1, m * T)), eye(m)
+            problem = cvxpy.Problem(
+                cvxpy.Minimize(G),
+                constraints,
             )
 
-            # finalize
-            if gain_wv == inf:
-                A = block([
-                    [-ones((p, 1)), zeros((p, m * m * T)), eye_sumE],
-                    [zeros((p * m * (T - 1), 1)), Phi, -eye(m * p * (T - 1))],
-                    [zeros((p * m * (T - 1), 1)), -Phi, -eye(m * p * (T - 1))],
-                ])
-            else:
-                A = block([
-                    [-ones((p, 1)), zeros((p, m * m * T)), zeros((p, m * m * T)), eye_sumE],
-                    [zeros((p * m * (T - 1), 1)), Phi, zeros((p * m * (T - 1), m * m * T)), -eye(m * p * (T - 1))],
-                    [zeros((p * m * (T - 1), 1)), -Phi, zeros((p * m * (T - 1), m * m * T)), -eye(m * p * (T - 1))],
-                    [zeros((m, 1)), zeros((m, m * m * T)), eye_sumH, zeros((m, m * p * (T - 1)))],
-                    [zeros((m * m * T, 1)), eye(m * m * T), -eye(m * m * T), zeros((m * m * T, m * p * (T - 1)))],
-                    [zeros((m * m * T, 1)), -eye(m * m * T), -eye(m * m * T), zeros((m * m * T, m * p * (T - 1)))],
-                ])
-
-            # making C A^k B ,changing matrix to vector
-            CAB = zeros(((T - 1) * p, m))
-            el_CAB = zeros((m * p * (T - 1), 1))
-
-            for i in range(1, T):
-                CAkB = system.C1 @ mpow(A_tilde, i) @ system.B2
-                CAB[(i - 1) * p:i * p, 0:m] = CAkB
-
-            for j in range(1, p * (T - 1) + 1):
-                for i in range(1, m + 1):
-                    el_CAB[i + (j - 1) * m - 1, 0] = CAB[j - 1, i - 1]
-
-            if gain_wv == inf:
-                b = block([
-                    [-abs(system.C1 @ system.B2) @ ones((m, 1))],
-                    [-el_CAB],
-                    [el_CAB]
-                ])
-            else:
-                b = block([
-                    [-abs((system.C1 @ system.B2) @ ones((m, 1)))],
-                    [-el_CAB],
-                    [el_CAB],
-                    [(gain_wv - 1) * ones((m, 1))],
-                    [zeros((m * m * T * 2, 1))],
-                ])
-
-            # solve LP
-            x = cvxpy.Variable((f.shape[0], 1))
-            objective = cvxpy.Minimize(f.transpose() @ x)
-            constraints = [A @ x <= b]
-            problem = cvxpy.Problem(objective, constraints)
-            try:
-                problem.solve(solver=solver or None)
-            except cvxpy.SolverError as e:
-                raise cvxpy.SolverError(f"Error from CVXPY.\n{str(e)}")
-
-            return matrix(x.value)
+            problem.solve(solver=solver, verbose=verbose)
+            ret = (
+                G.value[0],
+                [H2[k].value for k in range(T)],
+                [H2_bar[k].value for k in range(T)],
+                [Epsilon_bar[k - 1].value for k in range(1, T)],
+            )
+            return ret
 
         # STEP1. LP
         start_time_lp = time.time()  # To measure time.
-        x = _lp()  # Markov Parameter
-        E = x[0, 0] * q.delta
+        G, H2, H2_bar, Epsilon_bar = _lp()  # Markov Parameter
+        E = G * q.delta
         end_time_lp = time.time()  # To measure time.
         if verbose:
             print(f"Solved linear programming problem in {end_time_lp - start_time_lp:.3f}[s].")
 
         # STEP2. SVD
         start_time_SVD = time.time()  # To measure time.
-        H, Wo, S, Wc = _SVD_from(x, T, system.m, system.l)
+        H, Wo, S, Wc = _SVD_from(H2, T)
         end_time_SVD = time.time()  # To measure time.
         if verbose:
             print(f"Calculated SVD in {end_time_SVD - start_time_SVD:.3f}[s].")
@@ -1380,8 +1380,7 @@ class DynamicQuantizer():
                     f"The order of the quantizer {Q.N} is greater than {dim}, the value you specified. ",
                     "Please reduce the order manually using `order_reduced()`, or try other method.",
                 )
-            return None, inf
-        elif Q_gain_wv > gain_wv:
+        if Q_gain_wv > gain_wv:
             warnings.warn(
                 f"The `gain_wv` of the quantizer {Q_gain_wv} is greater than {gain_wv}, the value you specified. ",
             )
@@ -1398,7 +1397,7 @@ class DynamicQuantizer():
                   gain_wv: float = inf,
                   verbose: bool = False,
                   method: str = "SLSQP",
-                  obj_type = ["exp", "atan", "1.1", "100*1.1"][0]) -> Tuple["DynamicQuantizer", float]:
+                  obj_type=["exp", "atan", "1.1", "100*1.1"][0]) -> Tuple["DynamicQuantizer", float]:
         """
         Finds the stable and optimal dynamic quantizer `Q` for `system`.
         Returns `(Q, E)`. `E` is the estimation of E(Q)[1]_,[2]_,[3]_.
@@ -1735,7 +1734,7 @@ class DynamicQuantizer():
 
     def spec(self,
              steptime: Union[int, None] = None,
-             show: bool=True) -> float:
+             show: bool = True) -> float:
         """
         Prints the specs of this DynamicQuantizer.
 

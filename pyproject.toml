@@ -4,24 +4,25 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nqlib"
-version = "0.4.0"
-authors = [
-  { name="knttnk" },
+version = "0.5.0"
+authors = [{ name = "knttnk" }]
+keywords = [
+  "discrete-valued input control",
+  "control theory",
+  "quantizer",
+  "control system design",
+  "quantization",
+  "simulation",
 ]
 description = "NQLib: Library to design noise shaping quantizer for discrete-valued input control."
 readme = "README.md"
-requires-python = ">=3.6"
+requires-python = ">=3.8"
 classifiers = [
-    "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
 ]
-dependencies = [
-  "numpy",
-  'scipy',
-  'cvxpy',
-  "control[slycot]",
-]
+dependencies = ['numpy', 'scipy', 'slycot', 'control', 'cvxpy']
 
 
 [project.urls]

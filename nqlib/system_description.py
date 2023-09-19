@@ -20,6 +20,13 @@ __all__ = [
 # TODO: define function returns control.InputOutputSystem
 
 
+def _indent(s: str, num_space: int):
+    ret = ""
+    for line in s.splitlines():
+        ret += " " * num_space + line + "\n"
+    return ret[:-1]
+
+
 class Controller(object):
     """
     An instance of `Controller` represents the state-space model
@@ -131,6 +138,18 @@ class Controller(object):
         self.D1 = D1_mat
         self.D2 = D2_mat
 
+    def __repr__(self) -> str:
+        return (
+            f"nqlib.Controller(\n"
+            f"  A ={_indent(_np.array_repr(self.A), 5)[5:]},\n"
+            f"  B1={_indent(_np.array_repr(self.B1), 5)[5:]},\n"
+            f"  B2={_indent(_np.array_repr(self.B2), 5)[5:]},\n"
+            f"  C ={_indent(_np.array_repr(self.C), 5)[5:]},\n"
+            f"  D1={_indent(_np.array_repr(self.D1), 5)[5:]},\n"
+            f"  D2={_indent(_np.array_repr(self.D2), 5)[5:]},\n"
+            f")"
+        )
+
 
 class Plant(object):
     """
@@ -170,7 +189,7 @@ class Plant(object):
             P : { x(t+1) =  A x(t) + B u(t)
                 {  z(t)  = C1 x(t)
                 {  y(t)  = C2 x(t)
-                
+
         References
         ----------
         .. [5] Y. Minami and T. Muromaki: Differential evolution-based
@@ -260,8 +279,18 @@ class Plant(object):
             C2=matrix(zeros(ss.C.shape)),
         )
         ret.tf1 = tf
-        ret.tf2 = tf*0
+        ret.tf2 = tf * 0
         return ret
+
+    def __repr__(self) -> str:
+        return (
+            f"nqlib.Plant(\n"
+            f"  A ={_indent(_np.array_repr(self.A), 5)[5:]},\n"
+            f"  B ={_indent(_np.array_repr(self.B), 5)[5:]},\n"
+            f"  C1={_indent(_np.array_repr(self.C1), 5)[5:]},\n"
+            f"  C2={_indent(_np.array_repr(self.C2), 5)[5:]},\n"
+            f")"
+        )
 
 
 class System():
@@ -302,6 +331,19 @@ class System():
         ret += "           u = v           \n"
         return ret
 
+    def __repr__(self) -> str:
+        return (
+            f"nqlib.System(\n"
+            f"  A ={_indent(_np.array_repr(self.A), 5)[5:]},\n"
+            f"  B1={_indent(_np.array_repr(self.B1), 5)[5:]},\n"
+            f"  B2={_indent(_np.array_repr(self.B2), 5)[5:]},\n"
+            f"  C1={_indent(_np.array_repr(self.C1), 5)[5:]},\n"
+            f"  C2={_indent(_np.array_repr(self.C2), 5)[5:]},\n"
+            f"  D1={_indent(_np.array_repr(self.D1), 5)[5:]},\n"
+            f"  D2={_indent(_np.array_repr(self.D2), 5)[5:]},\n"
+            f")"
+        )
+
     def response_with_quantizer(self,
                                 quantizer: Union[_DynamicQuantizer, _StaticQuantizer],
                                 input,
@@ -328,7 +370,7 @@ class System():
         """
         if type(quantizer) is _StaticQuantizer:
             quantizer = _DynamicQuantizer(
-                zeros((1, 1)),  zeros((1, self.m)),
+                zeros((1, 1)), zeros((1, self.m)),
                 zeros((self.m, 1)),
                 q=quantizer,
             )
@@ -346,12 +388,12 @@ class System():
         x[:, 0:1] = matrix(x_0)
 
         for i in range(length):
-            u[:, i:i+1] = matrix(self.C2 @ x[:, i:i+1] + self.D2 @ r[:, i:i+1])
-            v[:, i:i+1] = matrix(quantizer.q(quantizer.C @ xi[:, i:i+1] + u[:, i:i+1]))
-            z[:, i:i+1] = matrix(self.C1 @ x[:, i:i+1] + self.D1 @ r[:, i:i+1])
+            u[:, i:i + 1] = matrix(self.C2 @ x[:, i:i + 1] + self.D2 @ r[:, i:i + 1])
+            v[:, i:i + 1] = matrix(quantizer.q(quantizer.C @ xi[:, i:i + 1] + u[:, i:i + 1]))
+            z[:, i:i + 1] = matrix(self.C1 @ x[:, i:i + 1] + self.D1 @ r[:, i:i + 1])
             if i < length - 1:
-                xi[:, i+1:i+2] = matrix(quantizer.A @ xi[:, i:i+1] + quantizer.B @ (v[:, i:i+1] - u[:, i:i+1]))
-                x[:, i+1:i+2] = matrix(self.A @ x[:, i:i+1] + self.B1 @ r[:, i:i+1] + self.B2 @ v[:, i:i+1])
+                xi[:, i + 1:i + 2] = matrix(quantizer.A @ xi[:, i:i + 1] + quantizer.B @ (v[:, i:i + 1] - u[:, i:i + 1]))
+                x[:, i + 1:i + 2] = matrix(self.A @ x[:, i:i + 1] + self.B1 @ r[:, i:i + 1] + self.B2 @ v[:, i:i + 1])
         return k, u, v, z
 
     def response(self, input, x_0) -> Tuple[_np.ndarray]:
@@ -386,11 +428,11 @@ class System():
         x[:, 0:1] = matrix(x_0)
 
         for i in range(length):
-            u[:, i:i+1] = matrix(self.C2 @ x[:, i:i+1] + self.D2 @ r[:, i:i+1])
-            z[:, i:i+1] = matrix(self.C1 @ x[:, i:i+1] + self.D1 @ r[:, i:i+1])
+            u[:, i:i + 1] = matrix(self.C2 @ x[:, i:i + 1] + self.D2 @ r[:, i:i + 1])
+            z[:, i:i + 1] = matrix(self.C1 @ x[:, i:i + 1] + self.D1 @ r[:, i:i + 1])
             if i < length - 1:
-                x[:, i+1:i+2] = matrix(
-                    self.A @ x[:, i:i+1] + self.B1 @ r[:, i:i+1] + self.B2 @ u[:, i:i+1]
+                x[:, i + 1:i + 2] = matrix(
+                    self.A @ x[:, i:i + 1] + self.B1 @ r[:, i:i + 1] + self.B2 @ u[:, i:i + 1]
                 )
         return k, u, z
 
@@ -428,7 +470,7 @@ class System():
             G : { x(t+1) =  A x(t) + B1 r(t) + B2 v(t)
                 {  z(t)  = C1 x(t) + D1 r(t)
                 {  u(t)  = C2 x(t) + D2 r(t)
-                
+
         References
         ----------
         .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
@@ -596,7 +638,7 @@ class System():
             )
 
         A = block([
-            [P.A,         zeros(shape=(P.A.shape[0], K.A.shape[1]))],
+            [P.A, zeros(shape=(P.A.shape[0], K.A.shape[1]))],
             [K.B2 @ P.C2, K.A],
         ])
         B1 = block([
@@ -608,10 +650,10 @@ class System():
             [zeros(shape=(K.A.shape[0], P.B.shape[1]))],
         ])
         C1 = block([
-            [P.C1,  zeros(shape=(P.C1.shape[0], K.A.shape[1]))],
+            [P.C1, zeros(shape=(P.C1.shape[0], K.A.shape[1]))],
         ])
         C2 = block([
-            [K.D2 @ P.C2,  K.C]
+            [K.D2 @ P.C2, K.C]
         ])
         D1 = zeros(shape=(C1.shape[0], B1.shape[1]))
         D2 = K.D1
@@ -665,8 +707,8 @@ class System():
             )
 
         A = block([
-            [P.A,                                        P.B @ K.C],
-            [zeros(shape=(K.A.shape[0], P.A.shape[1])),  K.A],
+            [P.A, P.B @ K.C],
+            [zeros(shape=(K.A.shape[0], P.A.shape[1])), K.A],
         ])
         B1 = block([
             [P.B @ K.D1],
@@ -677,10 +719,10 @@ class System():
             [K.B2],
         ])
         C1 = block([
-            P.C1,  zeros(shape=(P.C1.shape[0], K.A.shape[1]))
+            P.C1, zeros(shape=(P.C1.shape[0], K.A.shape[1]))
         ])
         C2 = block([
-            P.C2,  zeros(shape=(P.C2.shape[0], K.A.shape[1]))
+            P.C2, zeros(shape=(P.C2.shape[0], K.A.shape[1]))
         ])
         D1 = zeros(shape=(C1.shape[0], B1.shape[1]))
         D2 = zeros(shape=(B2.shape[1], B1.shape[1]))
@@ -817,7 +859,7 @@ class System():
         -------
         float
             Estimation of E(Q) in `steptime`.
-            
+
         References
         ----------
         .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
@@ -831,11 +873,11 @@ class System():
             raise ValueError(
                 "`(steptime is not None or _check_stability)` must be `True`."
             )
-        A_tilde = self.A + self.B2@self.C2  # convert to closed loop (only G)
+        A_tilde = self.A + self.B2 @ self.C2  # convert to closed loop (only G)
 
         A_bar = block([
-            [A_tilde,             self.B2@Q.C],
-            [zeros((Q.A.shape[0], A_tilde.shape[0])), Q.A+Q.B@Q.C],
+            [A_tilde, self.B2 @ Q.C],
+            [zeros((Q.A.shape[0], A_tilde.shape[0])), Q.A + Q.B @ Q.C],
         ])
         B_bar = block([
             [self.B2],
@@ -847,7 +889,7 @@ class System():
 
         # E = infinity
         if _check_stability:
-            Qcl = _ctrl.ss(A_bar, B_bar, C_bar, C_bar@B_bar*0, True)
+            Qcl = _ctrl.ss(A_bar, B_bar, C_bar, C_bar @ B_bar * 0, True)
             Qcl_minreal = Qcl.minreal()
             if eig_max(Qcl_minreal.A) > 1:
                 return inf
@@ -878,7 +920,7 @@ class System():
             E_current = norm(sum_CAB) * Q.delta
 
             if k >= k_min:
-                if abs(E_current-E_past)/E_current < 1e-8:
+                if abs(E_current - E_past) / E_current < 1e-8:
                     break
             k = k + 1
             A_bar_k = A_bar_k @ A_bar

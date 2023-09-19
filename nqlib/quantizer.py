@@ -346,6 +346,7 @@ def _nq_serial_decomposition(system: "System",
         a = unstable_zeros[0]
         G = (z - a) / z**i
         F = _ctrl.minreal(tf / G, verbose=False)
+        F = _ctrl.tf(_np.real(F.num), _np.real(F.den), F.dt)
         F_ss = _ctrl.tf2ss(F)
         B_F = matrix(F_ss.B)
         C_F = matrix(F_ss.C)
@@ -1030,6 +1031,7 @@ class DynamicQuantizer():
                   q: StaticQuantizer,
                   dim: int = inf,
                   gain_wv: float = inf,
+                  allow_unstable: bool = False,
                   verbose: bool = False) -> Tuple["DynamicQuantizer", float]:
         """
         Finds the stable and optimal dynamic quantizer for `system`
@@ -1059,6 +1061,11 @@ class DynamicQuantizer():
         gain_wv : float, optional
             Upper limit of gain w->v . Must be greater than `0`.
             (The default is `numpy.inf`).
+        allow_unstable: bool, optional
+            Whether to return valid `Q` even if it is unstable.
+            It's recommended to set `verbose` to `True`, so that 
+            you can remember the result is unstable.
+            If this is `True`, design method in reference [3] will not be used.
         verbose : bool, optional
             Whether to print the details.
             (The default is `False`).
@@ -1086,47 +1093,57 @@ class DynamicQuantizer():
         if verbose:
             print("Trying to calculate optimal dynamic quantizer...")
 
-        if system.type == _ConnectionType.FF and system.P.tf1.issiso():
-            # FF and SISO
-            Q, E = _nq_serial_decomposition(system, q, verbose)
-            if Q is not None:
-                return Q, E
-        if system.m >= system.l:
-            A_tilde = system.A + system.B2 @ system.C2  # convert to closed loop
-            # S2
-            tau = _find_tau(A_tilde, system.C1, system.B2, system.l, 10000)
-
-            if tau == -1:
-                if verbose:
-                    print("Couldn't calculate optimal dynamic quantizer algebraically. Trying other method...")
-                return None, inf
-
-            Q = DynamicQuantizer(
+        A_tilde = system.A + system.B2 @ system.C2  # convert to closed loop
+        def _Q():
+            return DynamicQuantizer(
                 A=A_tilde,
                 B=system.B2,
                 C=-pinv(system.C1 @ mpow(A_tilde, tau) @ system.B2) @ system.C1 @ mpow(A_tilde, tau + 1),
                 q=q,
             )
+        if (
+            (not allow_unstable) and
+            (system.type == _ConnectionType.FF and system.P.tf1.issiso())
+        ):
+            # FF and SISO
+            Q, E = _nq_serial_decomposition(system, q, verbose)
+            if Q is not None:
+                return Q, E
+        if system.m >= system.l:
+            # S2
+            tau = _find_tau(A_tilde, system.C1, system.B2, system.l, 10000)
+
+            if tau == -1:
+                if verbose:
+                    print("Couldn't calculate optimal dynamic quantizer algebraically. Trying another method...")
+                return None, inf
+
+            Q = _Q()
 
             E = norm(abs(system.C1 @ mpow(A_tilde, tau) @ system.B2)) * q.delta
             Q_gain_wv = Q.gain_wv()
 
             if not Q.is_stable:
-                if verbose:
-                    print("The quantizer is unstable. Try other method.")
-                return None, inf
-            elif Q.N > dim:
+                if allow_unstable:
+                    if verbose:
+                        print("The quantizer is unstable.")
+                    E = inf
+                else:
+                    if verbose:
+                        print("The quantizer is unstable. Try other methods.")
+                    return None, inf
+            if Q.N > dim:
                 if verbose:
                     print(
                         f"The order of the quantizer {Q.N} is greater than {dim}, the value you specified. ",
-                        "Try other method.",
+                        "Try other methods.",
                     )
                 return None, inf
             elif Q_gain_wv > gain_wv:
                 if verbose:
                     print(
                         f"The `gain_wv` of the quantizer {Q_gain_wv} is greater than {gain_wv}, the value you specified. ",
-                        "Try other method.",
+                        "Try other methods.",
                     )
                 return None, inf
             else:
@@ -1136,7 +1153,7 @@ class DynamicQuantizer():
         else:
             if verbose:
                 print(
-                    "`system.m >= system.l` must be `True`. Try other method.",
+                    "`system.m >= system.l` must be `True`. Try other methods.",
                 )
             return None, inf
 
@@ -1217,7 +1234,7 @@ class DynamicQuantizer():
             if verbose:
                 print(
                     "`design_LP` currently supports only finite `T`.",
-                    "Specify `T` or try other method.",
+                    "Specify `T` or try other methods.",
                 )
             return None, inf
         else:
@@ -1236,7 +1253,16 @@ class DynamicQuantizer():
             Returns
             -------
             _np.ndarray
-                Solution of LP.
+                Solution of LP. Form of
+                ```text
+                _np.array([
+                    [H_20],
+                    [H_21],
+                    :
+                    [H_2(T-2)],
+                ])
+                ```
+                So, the shape is `(m*(T-1), m)`.
 
             Raises
             ------
@@ -1257,7 +1283,7 @@ class DynamicQuantizer():
             # OP4
             ############################################################################
             # variables
-            G = cvxpy.Variable(1, name="G")  # The variable to minimize
+            G = cvxpy.Variable((1, 1), name="G")  # The variable to minimize
             H2 = [
                 cvxpy.Variable(
                     (m, m),
@@ -1331,7 +1357,7 @@ class DynamicQuantizer():
 
             problem.solve(solver=solver, verbose=verbose)
             ret = (
-                G.value[0],
+                G.value[0, 0],
                 [H2[k].value for k in range(T)],
                 [H2_bar[k].value for k in range(T)],
                 [Epsilon_bar[k - 1].value for k in range(1, T)],
@@ -1378,9 +1404,10 @@ class DynamicQuantizer():
             if verbose:
                 warnings.warn(
                     f"The order of the quantizer {Q.N} is greater than {dim}, the value you specified. ",
-                    "Please reduce the order manually using `order_reduced()`, or try other method.",
+                    "Please reduce the order manually using `order_reduced()`, or try other methods.",
                 )
-        if Q_gain_wv > gain_wv:
+            return Q, E
+        elif Q_gain_wv > gain_wv:
             warnings.warn(
                 f"The `gain_wv` of the quantizer {Q_gain_wv} is greater than {gain_wv}, the value you specified. ",
             )
@@ -1393,7 +1420,7 @@ class DynamicQuantizer():
                   *,
                   q: StaticQuantizer,
                   dim: int,
-                  T: int = None,  # TODO: これより下を反映
+                  T: int = None,
                   gain_wv: float = inf,
                   verbose: bool = False,
                   method: str = "SLSQP",
@@ -1430,10 +1457,10 @@ class DynamicQuantizer():
         verbose : bool, optional
             Whether to print the details.
             (The default is `False`).
-        method : str, optional  TODO: 削除
+        method : str, optional
             Specifies which method should be used in
             `scipy.optimize.minimize()`.
-            (The default is `""`, which implies that this function doesn't
+            (The default is `None`, which implies that this function doesn't
             specify the method).
 
         Returns

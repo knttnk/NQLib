@@ -14,6 +14,7 @@ if Version(_ctrl.__version__) >= Version("0.9.2"):
 else:
     ctrl_poles = _ctrl.pole
     ctrl_zeros = _ctrl.zero
+    _ctrl.use_numpy_matrix(False)
 
 
 import cvxpy
@@ -26,7 +27,6 @@ from scipy.special import comb as _comb
 from .linalg import (block, eig_max, eye, kron, matrix, mpow, norm, ones, pinv,
                      zeros)
 
-_ctrl.use_numpy_matrix(False)
 __all__ = [
     'StaticQuantizer',
     'DynamicQuantizer',

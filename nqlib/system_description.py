@@ -839,7 +839,8 @@ class System():
     def E(self,
           Q: _DynamicQuantizer,
           steptime: Union[int, None] = None,
-          _check_stability: bool = True) -> float:
+          _check_stability: bool = True,
+          verbose: bool = False) -> float:
         """
         Returns estimation of E(Q).
 
@@ -922,6 +923,7 @@ class System():
             if k >= k_min:
                 if abs(E_current - E_past) / E_current < 1e-8:
                     break
+            verbose and print(f"k={k}, E_past={E_past}, E_current={E_current}, E_current - E_past={E_current - E_past}")
             k = k + 1
             A_bar_k = A_bar_k @ A_bar
 

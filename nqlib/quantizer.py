@@ -622,7 +622,7 @@ class DynamicQuantizer():
             r"\end{aligned}\end{cases}$$"
         )
 
-    def gain_wv(self, steptime: Union[None, int, float] = None) -> float:
+    def gain_wv(self, steptime: Union[None, int, float] = None, verbose=False) -> float:
         """
         Computes the gain u->v and w->v of this `DynamicQuantizer` in
         `steptime`[1]_.
@@ -643,6 +643,7 @@ class DynamicQuantizer():
            quantizers for discrete-valued input control;IEEE Transactions
            on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
         """
+        verbose and print("Calculating gain w->v...")
         if steptime is None:  # None means infinity.
             steptime = inf
         elif type(steptime) is not int:
@@ -661,6 +662,7 @@ class DynamicQuantizer():
             A_i = eye(self.N)  # (self.A + self.B@self.C)**i
             ret = 0
             while i < steptime:
+                verbose and print(f"i = {i}, ret = {ret}")
                 sum_Q_wv = sum_Q_wv + abs(self.C @ A_i @ self.B)
                 ret_past = ret
                 ret = norm(sum_Q_wv)
@@ -1398,8 +1400,8 @@ class DynamicQuantizer():
         if reduced:
             if verbose:
                 print("Calculating E(Q).")
-            E = system.E(Q, steptime=T, _check_stability=False)
-        Q_gain_wv = Q.gain_wv(steptime=T)
+            E = system.E(Q, steptime=T, _check_stability=False, verbose=verbose)
+        # Q_gain_wv = Q.gain_wv(steptime=T, verbose=verbose)
         if Q.N > dim:
             if verbose:
                 warnings.warn(
@@ -1407,10 +1409,10 @@ class DynamicQuantizer():
                     "Please reduce the order manually using `order_reduced()`, or try other methods.",
                 )
             return Q, E
-        elif Q_gain_wv > gain_wv:
-            warnings.warn(
-                f"The `gain_wv` of the quantizer {Q_gain_wv} is greater than {gain_wv}, the value you specified. ",
-            )
+        # elif Q_gain_wv > gain_wv:
+        #     warnings.warn(
+        #         f"The `gain_wv` of the quantizer {Q_gain_wv} is greater than {gain_wv}, the value you specified. ",
+        #     )
         if verbose:
             print("Success!")
         return Q, E
@@ -1540,6 +1542,7 @@ class DynamicQuantizer():
                                "disp": verbose,
                                'maxiter': 10000,
                                'ftol': 1e-10,
+                               'iprint': 15,
                            },
                            method=method)
         if verbose:

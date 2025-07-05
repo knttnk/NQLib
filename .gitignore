@@ -1,0 +1,25 @@
+# nqlib以外のファルダ
+_various
+.vscode
+build
+dist
+nqlib_dev
+nqlib.egg-info
+online-documentation
+article
+
+# キャッシュ
+__pycache__
+
+# nqlib以外のファイル
+.pypirc
+_document_generator.py
+doc.txt
+log.txt
+NQLibリリース.ipynb
+setup.py
+リリース手順.txt
+conda-release/condaリリース.ps1
+conda-release/conda更新.ps1
+conda-release/condaリリース.ps1
+conda-release/condaリリース.ps1

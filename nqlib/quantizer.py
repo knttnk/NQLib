@@ -344,6 +344,8 @@ def _nq_serial_decomposition(system: "System",
         if i < 1:
             return None, inf
         a = unstable_zeros[0]
+        a = _np.real_if_close(a)
+        assert a.imag == 0, "Unstable zero must be real."
         G = (z - a) / z**i
         F = _ctrl.minreal(tf / G, verbose=False)
         F = _ctrl.tf(_np.real(F.num), _np.real(F.den), F.dt)

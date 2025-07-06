@@ -12,20 +12,22 @@ if Version(_ctrl.__version__) >= Version("0.9.2"):
     ctrl_poles = _ctrl.poles
     ctrl_zeros = _ctrl.zeros
 else:
-    ctrl_poles = _ctrl.pole
-    ctrl_zeros = _ctrl.zero
-    _ctrl.use_numpy_matrix(False)
+    ctrl_poles = _ctrl.pole  # type: ignore
+    ctrl_zeros = _ctrl.zero  # type: ignore
+    _ctrl.use_numpy_matrix(False)  # type: ignore
 
 
 import cvxpy
 import numpy as _np
-from numpy import inf
 from scipy.optimize import differential_evolution as _differential_evolution
 from scipy.optimize import minimize as _minimize
 from scipy.special import comb as _comb
-
 from .linalg import (block, eig_max, eye, kron, matrix, mpow, norm, ones, pinv,
                      zeros)
+from .types import (
+    NDArrayNum, Real, infint, InfInt,
+    validate_int, validate_int_or_inf, validate_float
+)
 
 __all__ = [
     'StaticQuantizer',
@@ -34,7 +36,7 @@ __all__ = [
 ]
 
 
-class _ConnectionType(_Enum):
+class ConnectionType(_Enum):
     """
     Inherits from `enum.Enum`.
     This class represents how system is connected.
@@ -63,7 +65,7 @@ class StaticQuantizer():
     """
 
     def __init__(self,
-                 function: Callable[[_np.ndarray], _np.ndarray],
+                 function: Callable[[NDArrayNum], NDArrayNum],
                  delta: float,
                  *,
                  error_on_excess: bool = True):
@@ -72,7 +74,7 @@ class StaticQuantizer():
 
         Parameters
         ----------
-        function : Callable[[_np.ndarray], _np.ndarray]
+        function : Callable[[NDArrayNum], NDArrayNum]
             For simulation. This function returns quantized value
             derived from input.
         delta : float
@@ -82,22 +84,20 @@ class StaticQuantizer():
             `numpy.max(abs(function(u) - u)) > delta` becomes `True`.
             (The default is `True`).
         """
-        try:
-            self.delta = float(delta)
-        except:
-            raise TypeError('`delta` must be a real number.')
-        if self.delta <= 0:
-            raise ValueError("`delta` must be greater than `0`.")
+        self.delta = validate_float(
+            delta,
+            infimum=0.0,  # delta must be greater than 0
+        )
 
         # check and assign `function`
         if not callable(function):
             raise TypeError('`function` must be a callable object.')
         else:
             if error_on_excess:
-                def safe_function(u):
+                def safe_function(u: NDArrayNum) -> NDArrayNum:
                     # returns function(u)
                     v = function(u)
-                    if _np.max(abs(v - u)) > delta:
+                    if _np.max(_np.abs(v - u)) > delta:
                         raise ValueError(
                             "During the simulation, `numpy.max(abs(q(u) - u))` "
                             "exceeded `delta`. Check the definition of "
@@ -128,18 +128,18 @@ class StaticQuantizer():
     def _repr_latex_(self):
         return r"$$q(*;\ " + f"\\Delta={self.delta}" + ")$$"
 
-    def __call__(self, u):
+    def __call__(self, u: NDArrayNum) -> NDArrayNum:
         """
         Calls `self.quantize`.
         """
         return self.quantize(u)
 
-    def quantize(self, u):
+    def quantize(self, u: NDArrayNum) -> NDArrayNum:
         """
         Quantizes the input signal `u`.
         Returns v in the following figure.
 
-        ```text
+        ```
                +-----+       
          u --->|  q  |---> v 
                +-----+       
@@ -161,7 +161,7 @@ class StaticQuantizer():
 
     @staticmethod
     def mid_tread(d: float,
-                  bit: Union[None, int] = None,
+                  bit: Union[InfInt, int] = infint,
                   *,
                   error_on_excess: bool = True) -> "StaticQuantizer":
         """
@@ -184,27 +184,36 @@ class StaticQuantizer():
         q : StaticQuantizer
             Mid-tread uniform `StaticQuantizer`.
         """
-        if not isinstance(d, (float, int)):
-            raise TypeError('`d` must be an real number.')
-        if d <= 0:
-            raise ValueError('`d` must be greater than `0`.')
-
+        try:
+            if d <= 0:
+                raise ValueError('`d` must be greater than `0`.')
+        except TypeError:
+            raise TypeError('`d` must be a real number.')
+        d = validate_float(
+            d,
+            infimum=0.0,  # d must be greater than 0
+            name="d",
+        )
         # function to quantize
-        def q(u):
+
+        def q(u: NDArrayNum) -> NDArrayNum:
             return ((u + d / 2) // d) * d
 
         # limit the values
-        if bit is None:
+        bit = validate_int_or_inf(
+            bit,
+            minimum=1,
+            name="bit",
+        )
+        if bit is infint:
             function = q
-        elif isinstance(bit, int) and bit > 0:
-            def function(u):
+        else:
+            def function(u: NDArrayNum) -> NDArrayNum:
                 return _np.clip(
                     q(u),
                     a_min=-(2**(bit - 1) - 1) * d,
                     a_max=2**(bit - 1) * d,
                 )
-        else:
-            raise TypeError('`bit` must be an natural number or `None`.')
 
         return StaticQuantizer(
             function=function,
@@ -214,7 +223,7 @@ class StaticQuantizer():
 
     @staticmethod
     def mid_riser(d: float,
-                  bit: Union[None, int] = None,
+                  bit: int | InfInt = infint,
                   *,
                   error_on_excess: bool = True) -> "StaticQuantizer":
         """
@@ -237,28 +246,32 @@ class StaticQuantizer():
         q : StaticQuantizer
             Mid-riser uniform `StaticQuantizer`.
         """
-        if not isinstance(d, (float, int)):
-            raise TypeError('`d` must be an real number.')
-        if d <= 0:
-            raise ValueError('`d` must be greater than `0`.')
+        d = validate_float(
+            d,
+            infimum=0.0,  # d must be greater than 0
+            name="d",
+        )
 
         # function to quantize
-        def q(u):
+        def q(u: NDArrayNum) -> NDArrayNum:
             return (u // d + 1 / 2) * d
 
         # limit the values
-        if bit is None:
+        bit = validate_int_or_inf(
+            bit,
+            minimum=1,
+            name="bit",
+        )
+        if bit is infint:
             function = q
-        elif isinstance(bit, int) and bit > 0:
-            def function(u):
+        else:
+            def function(u: NDArrayNum) -> NDArrayNum:
                 a_max = (2**(bit - 1) - 1 / 2) * d
                 return _np.clip(
                     q(u),
                     a_min=-a_max,
                     a_max=a_max,
                 )
-        else:
-            raise TypeError('`bit` must be an natural number or `None`.')
 
         return StaticQuantizer(
             function=function,
@@ -267,7 +280,7 @@ class StaticQuantizer():
         )
 
 
-def _find_tau(A_tilde, C_1, B_2, l: int, tau_max: int) -> int:
+def _find_tau(A_tilde: NDArrayNum, C_1: NDArrayNum, B_2: NDArrayNum, l: int, tau_max: int) -> int:
     """
     Finds the smallest integer tau satisfying
     `tau >= 0 and C_1 @ mpow(A + B_2@C_2, tau) @ B_2 != 0`
@@ -286,7 +299,7 @@ def _find_tau(A_tilde, C_1, B_2, l: int, tau_max: int) -> int:
     int
         `tau`. If `tau` doesn't exist, returns `-1`.
     """
-    def is_not_zero(M):
+    def is_not_zero(M: NDArrayNum) -> bool:
         return (M * 0 != M).all()
 
     for t in range(tau_max):
@@ -299,9 +312,9 @@ def _find_tau(A_tilde, C_1, B_2, l: int, tau_max: int) -> int:
     return -1
 
 
-def _nq_serial_decomposition(system: "System",
+def _nq_serial_decomposition(system: "System",  # type: ignore
                              q: StaticQuantizer,
-                             verbose: bool) -> Tuple["DynamicQuantizer", float]:
+                             verbose: bool) -> Tuple["DynamicQuantizer | None", float]:
     """
     Finds the stable and optimal dynamic quantizer for `system`
     using serial decomposition[1]_.
@@ -321,20 +334,24 @@ def _nq_serial_decomposition(system: "System",
     """
     if verbose:
         print("Trying to calculate quantizer using serial system decomposition...")
-    tf = system.P.tf1
+    P = system.P
+    if P is None:
+        if verbose:
+            print("P is None. Couldn't calculate by using serial system decomposition.")
+        return None, _np.inf
+    tf = P.tf1
     zeros_ = ctrl_zeros(tf)
     poles = ctrl_poles(tf)
 
     unstable_zeros = [zero for zero in zeros_ if abs(zero) > 1]
 
-    z = _ctrl.TransferFunction.z
-    z.dt = tf.dt
+    z = _ctrl.TransferFunction([1, 0], [1], tf.dt)
 
     if len(unstable_zeros) == 0:
         n_time_delay = len([p for p in poles if p == 0])  # count pole-zero
-        G = 1 / z**n_time_delay
+        G = 1 / z**n_time_delay  # type: ignore
         F = tf / G
-        F_ss = _ctrl.tf2ss(F)
+        F_ss: _ctrl.StateSpace = _ctrl.tf2ss(F)  # type: ignore
         B_F = matrix(F_ss.B)
         C_F = matrix(F_ss.C)
 
@@ -342,20 +359,20 @@ def _nq_serial_decomposition(system: "System",
     elif len(unstable_zeros) == 1:
         i = len(poles) - len(zeros_)  # relative order
         if i < 1:
-            return None, inf
+            return None, _np.inf
         a = unstable_zeros[0]
         a = _np.real_if_close(a)
         assert a.imag == 0, "Unstable zero must be real."
         G = (z - a) / z**i
         F = _ctrl.minreal(tf / G, verbose=False)
         F = _ctrl.tf(_np.real(F.num), _np.real(F.den), F.dt)
-        F_ss = _ctrl.tf2ss(F)
+        F_ss: _ctrl.StateSpace = _ctrl.tf2ss(F)  # type: ignore
         B_F = matrix(F_ss.B)
         C_F = matrix(F_ss.C)
 
         E = (1 + abs(a)) * abs(C_F @ B_F)[0, 0] * q.delta
     else:
-        return None, inf
+        return None, _np.inf
 
     A_F = matrix(F_ss.A)
     D_F = matrix(F_ss.D)
@@ -364,11 +381,11 @@ def _nq_serial_decomposition(system: "System",
     if (C_F @ B_F)[0, 0] == 0:
         if verbose:
             print("CF @ BF == 0 became true. Couldn't calculate by using serial system decomposition.")
-        return None, inf
+        return None, _np.inf
     if D_F[0, 0] != 0:
         if verbose:
             print("DF == 0 became true. Couldn't calculate by using serial system decomposition.")
-        return None, inf
+        return None, _np.inf
     Q = DynamicQuantizer(
         A=A_F,
         B=B_F,
@@ -380,8 +397,8 @@ def _nq_serial_decomposition(system: "System",
     return Q, E
 
 
-def _SVD_from(H2: List[_np.ndarray],
-              T: int) -> _np.ndarray:
+def _SVD_from(H2: List[NDArrayNum],
+              T: int) -> Tuple[NDArrayNum, NDArrayNum, NDArrayNum, NDArrayNum]:
     T_dash = math.floor(T / 2) + 1
 
     if T % 2 == 0:
@@ -415,14 +432,16 @@ def _SVD_from(H2: List[_np.ndarray],
     return H, Wo, S, Wc
 
 
-def _compose_Q_from_SVD(system: "System",
-                        q: StaticQuantizer,
-                        T: int,
-                        H: _np.ndarray,
-                        Wo: _np.ndarray,
-                        S: _np.ndarray,
-                        Wc: _np.ndarray,
-                        dim: int) -> Tuple["DynamicQuantizer", bool]:
+def _compose_Q_from_SVD(
+    system: "System",  # type: ignore
+    q: StaticQuantizer,
+    T: int,
+    H: _np.ndarray,
+    Wo: _np.ndarray,
+    S: _np.ndarray,
+    Wc: _np.ndarray,
+    dim: int | InfInt,
+) -> Tuple["DynamicQuantizer", bool]:
     """
     Parameters
     ----------
@@ -448,7 +467,7 @@ def _compose_Q_from_SVD(system: "System",
     # set order
     reduced = False
     if dim < m * T_dash:  # needs reduction
-        nQ = dim
+        nQ: int = dim  # type: ignore  # This will not occur if dim is infint.
         reduced = True
     else:
         nQ = m * T_dash
@@ -494,7 +513,7 @@ class DynamicQuantizer():
     Represents dynamic quantizer.
     """
 
-    def __init__(self, A, B, C, q: StaticQuantizer):
+    def __init__(self, A: NDArrayNum, B: NDArrayNum, C: NDArrayNum, q: StaticQuantizer):
         """
         Initializes an instance of `DynamicQuantizer`.
 
@@ -518,12 +537,9 @@ class DynamicQuantizer():
             Q : { xi(t+1) =    A xi(t) + B u(t)
                 {   v(t)  = q( C xi(t) +   u(t) )
         """
-        try:
-            A_mat = matrix(A)
-            B_mat = matrix(B)
-            C_mat = matrix(C)
-        except:
-            raise TypeError("`A`, `B` and `C` must be interpreted as matrices.")
+        A_mat = matrix(A)
+        B_mat = matrix(B)
+        C_mat = matrix(C)
 
         self.N = A_mat.shape[0]
         self.m = B_mat.shape[1]
@@ -555,14 +571,14 @@ class DynamicQuantizer():
 
     def _matrix_str(self,
                     index: int,
-                    formatter=lambda n: f"{n}",
+                    formatter: Callable[[_np.number], str] = lambda n: f"{n}",
                     sep: str = ", ",
-                    linesep="\n",
-                    indent=""):
+                    linesep: str = "\n",
+                    indent: str = "") -> str:
         """
         Returns the formatted string of DynamicQuantizer.
 
-        Args:
+        Arguments:
             index (int): 0, 1 and 2 represents A, B and C, respectively.
             sep (str, optional): Defaults to ",".
             linesep (str, optional): Defaults to "\n,".
@@ -581,7 +597,7 @@ class DynamicQuantizer():
                 ret += linesep
         return ret
 
-    def _str(self, q_str):
+    def _str(self, q_str: str) -> str:
         n_indents = 2
         linesep = "],\n"
         indent = " " * (n_indents + 1) + "["
@@ -624,7 +640,7 @@ class DynamicQuantizer():
             r"\end{aligned}\end{cases}$$"
         )
 
-    def gain_wv(self, steptime: Union[None, int, float] = None, verbose=False) -> float:
+    def gain_wv(self, steptime: int | InfInt = infint, verbose: bool = False) -> Real:
         """
         Computes the gain u->v and w->v of this `DynamicQuantizer` in
         `steptime`[1]_.
@@ -645,26 +661,25 @@ class DynamicQuantizer():
            quantizers for discrete-valued input control;IEEE Transactions
            on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
         """
-        verbose and print("Calculating gain w->v...")
-        if steptime is None:  # None means infinity.
-            steptime = inf
-        elif type(steptime) is not int:
-            raise TypeError("steptime must be an integer greater than 0 .")
-        elif steptime < 1:
-            raise ValueError(
-                "steptime must be an integer greater than 0 ."
-            )
+        if verbose:
+            print("Calculating gain w->v...")
+        steptime = validate_int_or_inf(
+            steptime,
+            minimum=1,  # steptime must be greater than 0
+            name="steptime",
+        )
 
         if not self.is_stable:
-            ret = inf
+            return _np.inf  # type: ignore
         else:  # stable case
             sum_Q_wv = eye(self.m)
 
             i = 0
             A_i = eye(self.N)  # (self.A + self.B@self.C)**i
-            ret = 0
+            ret = float(0.0)
             while i < steptime:
-                verbose and print(f"i = {i}, ret = {ret}")
+                if verbose:
+                    print(f"i = {i}, ret = {ret}")
                 sum_Q_wv = sum_Q_wv + abs(self.C @ A_i @ self.B)
                 ret_past = ret
                 ret = norm(sum_Q_wv)
@@ -674,14 +689,16 @@ class DynamicQuantizer():
                 i = i + 1
                 A_i = A_i @ (self.A + self.B @ self.C)
 
-        return ret
+            return ret  # type: ignore
 
-    def _objective_function(self,
-                            system: "System",
-                            *,
-                            T: int = None,  # TODO: これより下を反映
-                            gain_wv: float = inf,
-                            obj_type=["exp", "atan", "1.1", "100*1.1"][0]) -> float:
+    def _objective_function(
+        self,
+            system: "System",  # type: ignore
+            *,
+            T: int | InfInt = infint,  # TODO: これより下を反映
+            gain_wv: Real = _np.inf,  # type: ignore
+            obj_type: str = ["exp", "atan", "1.1", "100*1.1"][0],
+    ) -> Real:
         """
         Used in numerical optimization.
 
@@ -707,22 +724,24 @@ class DynamicQuantizer():
            Journal of Computational Intelligence and Applications, Vol. 15,
            No. 2, 1650008 (2016)
         """
-        # if T is None:
-        #     # TODO: support infinity evaluation time
-        #     return None, inf
+        T = validate_int_or_inf(
+            T,
+            minimum=1,  # T must be greater than 0
+            name="T",
+        )
         if system.m != 1:
             raise ValueError("`design_GD` and `design_DE` is currently supported for SISO systems only.")
 
         # Values representing the stability or gain_wv.y
         # if max(constraint_values) < 0, this quantizer satisfies the
         # constraints.
-        constraint_values = [
+        constraint_values: List[Real] = [
             eig_max(self.A + self.B @ self.C) - 1,
         ]
         if not _np.isposinf(gain_wv):
             constraint_values.append(self.gain_wv(T) - gain_wv)
 
-        max_v = max(constraint_values)
+        max_v = _np.max(constraint_values)
         if max_v < 0:
             types = ["exp", "atan", "1.1", "100*1.1"]
             if obj_type == types[0]:
@@ -733,10 +752,13 @@ class DynamicQuantizer():
                 return - 1.1 ** (- system.E(self))
             if obj_type == types[3]:
                 return - 10000 * _np.exp(- 0.01 * system.E(self))
+            raise ValueError(
+                f"`obj_type` must be one of {types}, but got {obj_type}."
+            )
         else:
             return max_v
 
-    def order_reduced(self, dim) -> "DynamicQuantizer":
+    def order_reduced(self, dim: int) -> "DynamicQuantizer":
         """
         Returns the quantizer with its order reduced.
 
@@ -762,15 +784,21 @@ class DynamicQuantizer():
         ImportError
             if NQLib couldn't import slycot.
         """
+        dim = validate_int(
+            dim,
+            minimum=1,
+            maximum=self.N - 1,  # order must be less than N
+            name="dim",
+        )
         try:
             from slycot import ab09ad
-        except ImportError as e:
+        except ImportError:
             raise ImportError((
                 "Reducing order of a quantizer requires slycot."
                 " Please install it."
             ))
         # マルコフパラメータから特異値分解する
-        Nr, Ar, Br, Cr, hsv = ab09ad(
+        _Nr, Ar, Br, Cr, _hsv = ab09ad(
             "D",  # means "Discrete time"
             "B",  # balanced (B) or not (N)
             "S",  # scale (S) or not (N)
@@ -779,7 +807,7 @@ class DynamicQuantizer():
             self.m,  # np.size(C,0)
             self.A, self.B, self.C,
             nr=dim,
-            tol=0.0,
+            tol=0.0,  # type: ignore
         )
         return DynamicQuantizer(Ar, Br, Cr, self.q)
 
@@ -814,31 +842,35 @@ class DynamicQuantizer():
         -------
         Q : DynamicQuantizer
         """
-        minreal_ss = _ctrl.ss(
+        minreal_ss: _ctrl.StateSpace = _ctrl.ss(
             self.A,
             self.B,
             self.C,
             self.C @ self.B * 0,
             True,
-        ).minreal()
-        return DynamicQuantizer(minreal_ss.A,
-                                minreal_ss.B,
-                                minreal_ss.C,
-                                self.q)
+        ).minreal()  # type: ignore
+        return DynamicQuantizer(
+            minreal_ss.A,  # type: ignore
+            minreal_ss.B,  # type: ignore
+            minreal_ss.C,  # type: ignore
+            self.q,
+        )
 
     @staticmethod
-    def design(system: "System",
-                       *,
-                       q: StaticQuantizer,
-                       T: int = None,
-                       gain_wv: float = inf,
-                       dim: int = inf,
-                       verbose: bool = False,
-                       use_analytical_method=True,
-                       use_LP_method=True,
-                       use_design_GB_method=True,
-                       use_DE_method=False,
-                       solver: str = None) -> Tuple["DynamicQuantizer", float]:
+    def design(
+        system: "System",  # type: ignore
+        *,
+        q: StaticQuantizer,
+        T: int | InfInt = infint,
+        gain_wv: float = _np.inf,
+        dim: int | InfInt = infint,
+        verbose: bool = False,
+        use_analytical_method: bool = True,
+        use_LP_method: bool = True,
+        use_design_GB_method: bool = True,
+        use_DE_method: bool = False,
+        solver: str | None = None
+    ) -> Tuple["DynamicQuantizer | None", float]:
         """
         Calculates the stable and optimal dynamic quantizer `Q` for `system`.
         Returns `(Q, E)`. `E` is the estimation of E(Q)[1]_,[2]_,[3]_.
@@ -899,7 +931,7 @@ class DynamicQuantizer():
            Journal of Computational Intelligence and Applications, Vol. 15,
            No. 2, 1650008 (2016)
         """
-        def _print_report(Q, method: str):
+        def _print_report(Q: "DynamicQuantizer | None", method: str):
             if verbose:
                 if Q is None:
                     print(
@@ -939,17 +971,19 @@ class DynamicQuantizer():
                 '`q` must be an instance of `nqlib.StaticQuantizer`.'
             )
 
-        # check gain
-        if gain_wv < 1:
-            raise ValueError(
-                '`gain_wv` must be greater than or equal to `1`.'
-            )
+        # check gain_wv
+        gain_wv = validate_float(
+            gain_wv,
+            infimum=0.0,  # gain_wv must be greater than 0
+            name="gain_wv",
+        )
 
         # check dim
-        if dim != inf and not isinstance(dim, int):
-            raise TypeError("`dim` must be `numpy.inf` or an instance of `int`.")
-        elif dim < 1:
-            raise ValueError('`dim` must be greater than `0`.')
+        dim = validate_int_or_inf(
+            dim,
+            minimum=1,  # order must be greater than 0
+            name="dim",
+        )
 
         # algebraically optimize
         if use_analytical_method:
@@ -964,8 +998,13 @@ class DynamicQuantizer():
             if Q is not None:
                 return Q, E
 
-        candidates = []
+        candidates: List[Tuple[DynamicQuantizer, float]] = []
         # numerically optimize
+        T = validate_int_or_inf(
+            T,
+            minimum=1,  # T must be greater than 0
+            name="T",
+        )
         if use_LP_method:
             Q, E = DynamicQuantizer.design_LP(
                 system,
@@ -976,14 +1015,9 @@ class DynamicQuantizer():
                 solver=solver,
                 verbose=verbose,
             )
-
             _print_report(Q, "the LP method")
             if Q is not None:
-                candidates.append(
-                    dict(Q=Q, E=E)
-                )
-        if dim is None or dim == inf:
-            dim = system.n
+                candidates.append((Q, E))
         if use_design_GB_method and isinstance(dim, int):
             Q, E = DynamicQuantizer.design_GD(
                 system,
@@ -995,9 +1029,7 @@ class DynamicQuantizer():
             )
             _print_report(Q, "the gradient based method")
             if Q is not None:
-                candidates.append(
-                    dict(Q=Q, E=E)
-                )
+                candidates.append((Q, E))
         if use_DE_method and isinstance(dim, int):
             Q, E = DynamicQuantizer.design_DE(
                 system,
@@ -1009,15 +1041,13 @@ class DynamicQuantizer():
             )
             _print_report(Q, "the gradient based method")
             if Q is not None:
-                candidates.append(
-                    dict(Q=Q, E=E)
-                )
+                candidates.append((Q, E))
 
         # compare all candidates and return the best
         if len(candidates) > 0:
             Q, E = min(
                 candidates,
-                key=lambda c: c.E,
+                key=lambda c: c[1],
             )
             return Q, E
         else:
@@ -1026,17 +1056,17 @@ class DynamicQuantizer():
                     "NQLib could not design a quantizer under these conditions. ",
                     "Please try different conditions.",
                 )
-
-            return None, inf
+            return None, _np.inf
 
     @staticmethod
-    def design_AG(system: "System",
+    def design_AG(system: "System",  # type: ignore
                   *,
                   q: StaticQuantizer,
-                  dim: int = inf,
-                  gain_wv: float = inf,
+                  # TODO: 考慮できないパラメータを渡せないようにする
+                  dim: int | InfInt = infint,
+                  gain_wv: float = _np.inf,
                   allow_unstable: bool = False,
-                  verbose: bool = False) -> Tuple["DynamicQuantizer", float]:
+                  verbose: bool = False) -> Tuple["DynamicQuantizer | None", float]:
         """
         Finds the stable and optimal dynamic quantizer for `system`
         algebraically[2]_,[3]_.
@@ -1098,7 +1128,8 @@ class DynamicQuantizer():
             print("Trying to calculate optimal dynamic quantizer...")
 
         A_tilde = system.A + system.B2 @ system.C2  # convert to closed loop
-        def _Q():
+
+        def _Q(A_tilde: NDArrayNum) -> "DynamicQuantizer":
             return DynamicQuantizer(
                 A=A_tilde,
                 B=system.B2,
@@ -1106,13 +1137,17 @@ class DynamicQuantizer():
                 q=q,
             )
         if (
-            (not allow_unstable) and
-            (system.type == _ConnectionType.FF and system.P.tf1.issiso())
+            (_P := system.P) is not None and
+            (system.type == ConnectionType.FF and _P.tf1.issiso())
         ):
             # FF and SISO
             Q, E = _nq_serial_decomposition(system, q, verbose)
             if Q is not None:
-                return Q, E
+                if allow_unstable:
+                    # TODO: 先のは評価しなくていい？
+                    return Q, E
+                if Q.is_stable:
+                    return Q, E
         if system.m >= system.l:
             # S2
             tau = _find_tau(A_tilde, system.C1, system.B2, system.l, 10000)
@@ -1120,36 +1155,36 @@ class DynamicQuantizer():
             if tau == -1:
                 if verbose:
                     print("Couldn't calculate optimal dynamic quantizer algebraically. Trying another method...")
-                return None, inf
+                return None, _np.inf
 
-            Q = _Q()
+            Q = _Q(A_tilde)
 
-            E = norm(abs(system.C1 @ mpow(A_tilde, tau) @ system.B2)) * q.delta
+            E: float = norm(abs(system.C1 @ mpow(A_tilde, tau) @ system.B2)) * q.delta  # type: ignore
             Q_gain_wv = Q.gain_wv()
 
             if not Q.is_stable:
                 if allow_unstable:
                     if verbose:
                         print("The quantizer is unstable.")
-                    E = inf
+                    E = _np.inf
                 else:
                     if verbose:
                         print("The quantizer is unstable. Try other methods.")
-                    return None, inf
+                    return None, _np.inf
             if Q.N > dim:
                 if verbose:
                     print(
                         f"The order of the quantizer {Q.N} is greater than {dim}, the value you specified. ",
                         "Try other methods.",
                     )
-                return None, inf
+                return None, _np.inf
             elif Q_gain_wv > gain_wv:
                 if verbose:
                     print(
                         f"The `gain_wv` of the quantizer {Q_gain_wv} is greater than {gain_wv}, the value you specified. ",
                         "Try other methods.",
                     )
-                return None, inf
+                return None, _np.inf
             else:
                 if verbose:
                     print("Success!")
@@ -1159,17 +1194,17 @@ class DynamicQuantizer():
                 print(
                     "`system.m >= system.l` must be `True`. Try other methods.",
                 )
-            return None, inf
+            return None, _np.inf
 
     @staticmethod
-    def design_LP(system: "System",
+    def design_LP(system: "System",  # type: ignore
                   *,
                   q: StaticQuantizer,
-                  dim: int = inf,
-                  T: int = None,
-                  gain_wv: float = inf,
-                  solver: str = None,
-                  verbose: bool = False) -> Tuple["DynamicQuantizer", float]:
+                  dim: int | InfInt = infint,
+                  T: int | InfInt = infint,
+                  gain_wv: float = _np.inf,
+                  solver: str | None = None,
+                  verbose: bool = False) -> Tuple["DynamicQuantizer | None", float]:
         """
         Finds the stable and optimal dynamic quantizer for `system`
         with method using linear programming method[1]_.
@@ -1232,41 +1267,56 @@ class DynamicQuantizer():
         """
         if verbose:
             print("Trying to design a dynamic quantizer using LP...")
-        if T is None or T == inf:
-            T = inf
-            T_solve = T
+        # Check parameters
+        T = validate_int_or_inf(
+            T,
+            minimum=1,  # T must be greater than 0
+            name="T",
+        )
+        if T is infint:
             if verbose:
                 print(
                     "`design_LP` currently supports only finite `T`.",
                     "Specify `T` or try other methods.",
                 )
-            return None, inf
+            return None, _np.inf
         else:
             if T % 2 == 0:
                 T_solve = T + 1
             else:
                 T_solve = T
-        if T * dim > 1000:
+        dim = validate_int_or_inf(
+            dim,
+            minimum=1,  # order must be greater than 0
+            name="dim",
+        )
+        gain_wv = validate_float(
+            gain_wv,
+            infimum=0.0,  # gain_wv must be greater than 0
+            name="gain_wv",
+        )
+        if T * float(dim) > 1000:
             if verbose:
                 print("This may take very long time. Please wait or interrupt.")
 
-        def _lp() -> _np.ndarray:
+        def _lp() -> Tuple[float, List[NDArrayNum], List[NDArrayNum], List[NDArrayNum]]:
             """
             Composes and solves linear problem to find good quantizer.
 
             Returns
             -------
             _np.ndarray
-                Solution of LP. Form of
-                ```text
-                _np.array([
-                    [H_20],
-                    [H_21],
-                    :
-                    [H_2(T-2)],
-                ])
-                ```
-                So, the shape is `(m*(T-1), m)`.
+
+            Solution of LP. Form of
+            ```
+            _np.array([
+                [H_20],
+                [H_21],
+                :
+                [H_2(T-2)],
+            ])
+            ```
+            So, the shape is `(m*(T-1), m)`.
 
             Raises
             ------
@@ -1330,7 +1380,7 @@ class DynamicQuantizer():
             one_p = _np.ones((p, 1))
 
             # compose a problem
-            constraints = [
+            constraints: List[cvxpy.Constraint] = [
                 (_np.abs(C @ B) + sum(Epsilon_bar)) @ one_m <= one_p @ G,
                 *[
                     -Epsilon_bar[k - 1] <= C @ mpow(A, k) @ B + Phi[k - 1] @ cvxpy.vstack(H2[0:k])
@@ -1349,10 +1399,9 @@ class DynamicQuantizer():
                     for k in range(T)
                 ],
             ]
-            if gain_wv < inf:
-                constraints.append(
-                    (_np.eye(m) + sum(H2_bar)) @ one_m <= gain_wv * one_m
-                )
+            if gain_wv < _np.inf:
+                _c: cvxpy.Constraint = (_np.eye(m) + sum(H2_bar)) @ one_m <= gain_wv * one_m  # type: ignore
+                constraints.append(_c)
 
             problem = cvxpy.Problem(
                 cvxpy.Minimize(G),
@@ -1360,19 +1409,18 @@ class DynamicQuantizer():
             )
 
             problem.solve(solver=solver, verbose=verbose)
-            ret = (
-                G.value[0, 0],
+            return (
+                G.value[0, 0],  # type: ignore
                 [H2[k].value for k in range(T)],
                 [H2_bar[k].value for k in range(T)],
                 [Epsilon_bar[k - 1].value for k in range(1, T)],
             )
-            return ret
 
         # STEP1. LP
         start_time_lp = time.time()  # To measure time.
-        G, H2, H2_bar, Epsilon_bar = _lp()  # Markov Parameter
-        E = G * q.delta
+        G, H2, _H2_bar, _Epsilon_bar = _lp()  # Markov Parameter
         end_time_lp = time.time()  # To measure time.
+        E = G * q.delta
         if verbose:
             print(f"Solved linear programming problem in {end_time_lp - start_time_lp:.3f}[s].")
 
@@ -1407,7 +1455,7 @@ class DynamicQuantizer():
         if Q.N > dim:
             if verbose:
                 warnings.warn(
-                    f"The order of the quantizer {Q.N} is greater than {dim}, the value you specified. ",
+                    f"The order of the quantizer {Q.N} is greater than {dim}, the value you specified. "
                     "Please reduce the order manually using `order_reduced()`, or try other methods.",
                 )
             return Q, E
@@ -1420,15 +1468,17 @@ class DynamicQuantizer():
         return Q, E
 
     @staticmethod
-    def design_GD(system: "System",
-                  *,
-                  q: StaticQuantizer,
-                  dim: int,
-                  T: int = None,
-                  gain_wv: float = inf,
-                  verbose: bool = False,
-                  method: str = "SLSQP",
-                  obj_type=["exp", "atan", "1.1", "100*1.1"][0]) -> Tuple["DynamicQuantizer", float]:
+    def design_GD(
+        system: "System",  # type: ignore
+        *,
+        q: StaticQuantizer,
+        dim: int,
+        T: int | InfInt = infint,
+        gain_wv: float = _np.inf,
+        verbose: bool = False,
+        method: str = "SLSQP",
+        obj_type: str = ["exp", "atan", "1.1", "100*1.1"][0],
+    ) -> Tuple["DynamicQuantizer | None", float]:
         """
         Finds the stable and optimal dynamic quantizer `Q` for `system`.
         Returns `(Q, E)`. `E` is the estimation of E(Q)[1]_,[2]_,[3]_.
@@ -1485,36 +1535,39 @@ class DynamicQuantizer():
            Journal of Computational Intelligence and Applications, Vol. 15,
            No. 2, 1650008 (2016)
         """  # TODO: ドキュメント更新
-        # if T is None:
-        #     # TODO: support infinity evaluation time
-        #     return None, inf
-        if not isinstance(dim, int):
-            raise TypeError("`dim` must be `numpy.inf` or an instance of `int`.")
-        elif dim < 1:
-            raise ValueError("`dim` must be greater than `0`.")
-        # TODO: siso のチェック
+        T = validate_int_or_inf(
+            T,
+            minimum=1,  # T must be greater than 0
+            name="T",
+        )
+        dim = validate_int(
+            dim,
+            minimum=1,  # order must be greater than 0
+            name="dim",
+        )
+        # TODO: check if system is SISO
 
         # functions to calculate E from
         # x = [an, ..., a1, cn, ..., c1]  (n = dim)
-        def a(x):
+        def a(x: NDArrayNum) -> NDArrayNum:
             """
             a = [an, ..., a1]
             """
             return x[:dim]
 
-        def c(x):
+        def c(x: NDArrayNum) -> NDArrayNum:
             """
             c = [cn, ..., c1]
             """
             return x[dim:]
 
-        def _Q(x):
+        def _Q(x: NDArrayNum) -> DynamicQuantizer:
             # controllable canonical form
             _A = block([
                 [zeros((dim - 1, 1)), eye(dim - 1)],
                 [-a(x)],
             ])
-            _B = block([
+            _B = block([  # type: ignore
                 [zeros((dim - 1, 1))],
                 [1],
             ])
@@ -1526,27 +1579,31 @@ class DynamicQuantizer():
                 q=q,
             )
 
-        def obj(x):
+        def obj(x: NDArrayNum) -> Real:
             return _Q(x)._objective_function(system,
                                              T=T,
-                                             gain_wv=gain_wv,
+                                             gain_wv=gain_wv,  # type: ignore
                                              obj_type=obj_type)
 
         # optimize
         if verbose:
-            print("Designing a quantizer with gradient-based optimization.")
-            print(f"The optimization method is '{method}'.")
-            print("### Message from `scipy.optimize.minimize()`. ###")
-        result = _minimize(obj,
-                           x0=_np.random.randn(2 * dim) * 0.001,
-                           tol=0,
-                           options={
-                               "disp": verbose,
-                               'maxiter': 10000,
-                               'ftol': 1e-10,
-                               'iprint': 15,
-                           },
-                           method=method)
+            print(
+                "Designing a quantizer with gradient-based optimization.\n"
+                f"The optimization method is '{method}'.\n"
+                "### Message from `scipy.optimize.minimize()`. ###"
+            )
+        result = _minimize(
+            obj,
+            x0=_np.random.randn(2 * dim) * 0.001,  # TODO: Better init
+            tol=0,
+            options={
+                "disp": verbose,
+                'maxiter': 10000,
+                'ftol': 1e-10,
+                'iprint': 15,
+            },
+            method=method,
+        )
         if verbose:
             print(result.message)
             print("### End of message from `scipy.optimize.minimize()`. ###")
@@ -1559,20 +1616,22 @@ class DynamicQuantizer():
                 print(f"E = {E}")
         else:
             Q = None
-            E = inf
+            E = _np.inf
             if verbose:
                 print("Optimization failed.")
 
         return Q, E
 
     @staticmethod
-    def design_DE(system: "System",
-                  *,
-                  q: StaticQuantizer,
-                  dim: int,
-                  T: int = None,  # TODO: これより下を反映
-                  gain_wv: float = inf,
-                  verbose: bool = False) -> Tuple["DynamicQuantizer", float]:  # TODO: method のデフォルトを決める
+    def design_DE(
+        system: "System",  # type: ignore
+        *,
+        q: StaticQuantizer,
+        dim: int,  # This must be finite
+        T: int | InfInt = infint,  # TODO: これより下を反映
+        gain_wv: float = _np.inf,
+        verbose: bool = False,
+    ) -> Tuple["DynamicQuantizer | None", float]:  # TODO: method のデフォルトを決める
         """
         Calculates the stable and optimal dynamic quantizer `Q` for `system`.
         Returns `(Q, E)`. `E` is the estimation of E(Q)[1]_,[2]_,[3]_.
@@ -1614,36 +1673,39 @@ class DynamicQuantizer():
            Journal of Computational Intelligence and Applications, Vol. 15,
            No. 2, 1650008 (2016)
         """
-        # if T is None:
-        #     # TODO: support infinity evaluation time
-        #     return None, inf
-        if not isinstance(dim, int):
-            raise TypeError("`dim` must be an instance of `int`.")
-        elif dim < 1:
-            raise ValueError("`dim` must be greater than `0`.")
-        # TODO: siso のチェック
+        T = validate_int(
+            T,
+            minimum=1,  # T must be greater than 0
+            name="T",
+        )
+        dim = validate_int(
+            dim,
+            minimum=1,  # order must be greater than 0
+            name="dim",
+        )
+        # TODO: check if system is SISO
 
         # functions to calculate E from
         # x = [an, ..., a1, cn, ..., c1]  (n = dim)
-        def a(x):
+        def a(x: NDArrayNum) -> NDArrayNum:
             """
             a = [an, ..., a1]
             """
             return x[:dim]
 
-        def c(x):
+        def c(x: NDArrayNum) -> NDArrayNum:
             """
             c = [cn, ..., c1]
             """
             return x[dim:]
 
-        def _Q(x):
+        def _Q(x: NDArrayNum) -> DynamicQuantizer:
             # controllable canonical form
             _A = block([
                 [zeros((dim - 1, 1)), eye(dim - 1)],
                 [-a(x)],
             ])
-            _B = block([
+            _B = block([  # type: ignore
                 [zeros((dim - 1, 1))],
                 [1],
             ])
@@ -1655,23 +1717,25 @@ class DynamicQuantizer():
                 q=q,
             )
 
-        def obj(x):
-            return _Q(x)._objective_function(system,
-                                             T=T,
-                                             gain_wv=gain_wv)
+        def obj(x: NDArrayNum) -> Real:
+            return _Q(x)._objective_function(
+                system,
+                T=T,
+                gain_wv=gain_wv,  # type: ignore
+            )
 
-        def comb(k):
-            return _comb(dim, k, exact=True, repetition=False)
+        def comb(k: int) -> int:
+            return _comb(dim, k, exact=True, repetition=False)  # type: ignore
 
         # optimize
-        bounds = [matrix([-1, 1])[0] * comb(i) for i in range(dim)] + [matrix([-2, 2])[0] * comb(dim // 2) for i in range(dim)]
+        bounds = [matrix([-1, 1])[0] * comb(i) for i in range(dim)] + [matrix([-2, 2])[0] * comb(dim // 2) for _ in range(dim)]
         if verbose:
             print("Designing a quantizer with differential evolution.")
             print("### Message from `scipy.optimize.differential_evolution()`. ###")
         result = _differential_evolution(
             obj,
             bounds=bounds,  # TODO: よりせまく
-            atol=1e-6,  # absolute
+            atol=1e-6,  # type: ignore
             tol=0,  # relative
             maxiter=1000,
             strategy='rand2exp',
@@ -1690,13 +1754,13 @@ class DynamicQuantizer():
                 print(f"E = {E}")
         else:
             Q = None
-            E = inf
+            E = _np.inf
             if verbose:
                 print("Optimization failed.")
 
         return Q, E
 
-    def quantize(self, u) -> _np.ndarray:
+    def quantize(self, u: NDArrayNum) -> NDArrayNum:
         """
         Quantizes the input signal `u`.
         Returns v in the following figure.
@@ -1732,8 +1796,8 @@ class DynamicQuantizer():
         return v
 
     def cost(self,
-             system: "System",
-             steptime: Union[int, None] = None,
+             system: "System",  # type: ignore
+             steptime: int | InfInt = infint,
              _check_stability: bool = True) -> float:
         """
         Returns estimation of E(Q), where Q is this dynamic quantizer.
@@ -1765,8 +1829,8 @@ class DynamicQuantizer():
         return system.E(self, steptime, _check_stability)
 
     def spec(self,
-             steptime: Union[int, None] = None,
-             show: bool = True) -> float:
+             steptime: int | InfInt = infint,
+             show: bool = True) -> str:
         """
         Prints the specs of this DynamicQuantizer.
 
@@ -1784,12 +1848,15 @@ class DynamicQuantizer():
         str
             Printed string.
         """
-        s = "The specs of \n"
-        s += str(self) + "\n"
-        s += f"order    : {self.N}\n"
-        s += f"stability: {'stable' if self.is_stable else 'unstable'}\n"
-        s += f"gain_wv  : {self.gain_wv(steptime)}\n"
-        show and print(s)
+        s = (
+            "The specs of \n"
+            f"{str(self)}\n"
+            f"order    : {self.N}\n"
+            f"stability: {'stable' if self.is_stable else 'unstable'}\n"
+            f"gain_wv  : {self.gain_wv(steptime)}\n"
+        )
+        if show:
+            print(s)
         return s
 
 
@@ -1826,9 +1893,9 @@ def order_reduced(Q: DynamicQuantizer, dim: int) -> DynamicQuantizer:
         raise TypeError(
             '`Q` must be an instance of `nqlib.DynamicQuantizer`.'
         )
-    # check dim
-    if not isinstance(dim, int):
-        raise TypeError("`dim` must be an instance of `int`.")
-    elif dim < 1:
-        raise ValueError('`dim` must be greater than `0`.')
+    dim = validate_int(
+        dim,
+        minimum=1,  # order must be greater than 0
+        name="dim",
+    )
     return Q.order_reduced(dim)

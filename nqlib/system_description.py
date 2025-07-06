@@ -3,13 +3,17 @@ from typing import Tuple, Union
 
 import control as _ctrl
 import numpy as _np
-from numpy import inf
+from numpy.typing import ArrayLike
 
 from .linalg import block, eye, matrix, norm, zeros, eig_max
-from .quantizer import DynamicQuantizer as _DynamicQuantizer
-from .quantizer import StaticQuantizer as _StaticQuantizer
-from .quantizer import _ConnectionType
+from .quantizer import DynamicQuantizer
+from .quantizer import StaticQuantizer
+from .quantizer import ConnectionType
 from packaging.version import Version
+from .types import (
+    NDArrayNum, infint, InfInt,
+    validate_int_or_inf,
+)
 
 if Version(_ctrl.__version__) >= Version("0.9.2"):
     # ctrl_poles = _ctrl.poles
@@ -18,7 +22,7 @@ if Version(_ctrl.__version__) >= Version("0.9.2"):
 else:
     # ctrl_poles = _ctrl.pole
     # ctrl_zeros = _ctrl.zero
-    _ctrl.use_numpy_matrix(False)
+    _ctrl.use_numpy_matrix(False)  # type: ignore
 
 __all__ = [
     'System',
@@ -29,7 +33,7 @@ __all__ = [
 # TODO: define function returns control.InputOutputSystem
 
 
-def _indent(s: str, num_space: int):
+def _indent(s: str, num_space: int) -> str:
     ret = ""
     for line in s.splitlines():
         ret += " " * num_space + line + "\n"
@@ -45,7 +49,7 @@ class Controller(object):
             {  u(t)  = C x(t) + D1 r(t) + D2 y(t)
     """
 
-    def __init__(self, A, B1, B2, C, D1, D2):
+    def __init__(self, A: ArrayLike, B1: ArrayLike, B2: ArrayLike, C: ArrayLike, D1: ArrayLike, D2: ArrayLike):
         """
         Initializes an instance of `Controller`. You can create an
         instance of `System` with `Controller`[1]_.
@@ -170,7 +174,7 @@ class Plant(object):
             {  y(t)  = C2 x(t)
     """
 
-    def __init__(self, A, B, C1, C2):
+    def __init__(self, A: ArrayLike, B: ArrayLike, C1: ArrayLike, C2: ArrayLike):
         """
         Initializes an instance of `Plant`. You can create an
         instance of `System` with `Plant`.
@@ -251,8 +255,8 @@ class Plant(object):
         ss2 = _ctrl.ss(
             self.A, self.B, self.C2, zeros((self.C2.shape[0], self.B.shape[1]))
         )
-        self.tf1 = _ctrl.ss2tf(ss1)
-        self.tf2 = _ctrl.ss2tf(ss2)
+        self.tf1: _ctrl.TransferFunction = _ctrl.ss2tf(ss1)
+        self.tf2: _ctrl.TransferFunction = _ctrl.ss2tf(ss2)
 
     @staticmethod
     def from_TF(tf: _ctrl.TransferFunction) -> "Plant":
@@ -280,12 +284,13 @@ class Plant(object):
 
         But if you use this method, `C2` becomes `0`.
         """
-        ss = _ctrl.tf2ss(tf)
+        ss: _ctrl.StateSpace = _ctrl.tf2ss(tf)  # type: ignore
+        _C = matrix(ss.C)
         ret = Plant(
             A=matrix(ss.A),
             B=matrix(ss.B),
-            C1=matrix(ss.C),
-            C2=matrix(zeros(ss.C.shape)),
+            C1=_C,
+            C2=matrix(zeros(_C.shape)),
         )
         ret.tf1 = tf
         ret.tf2 = tf * 0
@@ -353,10 +358,12 @@ class System():
             f")"
         )
 
-    def response_with_quantizer(self,
-                                quantizer: Union[_DynamicQuantizer, _StaticQuantizer],
-                                input,
-                                x_0) -> Tuple[_np.ndarray]:
+    def response_with_quantizer(
+        self,
+        quantizer: Union[DynamicQuantizer, StaticQuantizer],
+        input: ArrayLike,
+        x_0: ArrayLike,
+    ) -> Tuple[NDArrayNum, NDArrayNum, NDArrayNum, NDArrayNum]:
         """
         Performs a simulation with `quantizer` and returns results.
 
@@ -377,12 +384,15 @@ class System():
            quantizers for discrete-valued input control;IEEE Transactions
            on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
         """
-        if type(quantizer) is _StaticQuantizer:
-            quantizer = _DynamicQuantizer(
-                zeros((1, 1)), zeros((1, self.m)),
-                zeros((self.m, 1)),
-                q=quantizer,
-            )
+        _quantizer: DynamicQuantizer = DynamicQuantizer(
+            zeros((1, 1)), zeros((1, self.m)),
+            zeros((self.m, 1)),
+            q=quantizer,
+        ) if type(quantizer) is StaticQuantizer else quantizer  # type: ignore
+        A = _quantizer.A
+        B = _quantizer.B
+        C = _quantizer.C
+        q = _quantizer.q
         # TODO: support xP_0, xK_0
         # TODO: support time
         r = matrix(input)
@@ -392,20 +402,20 @@ class System():
         z = zeros((self.l, length))
         u = zeros((self.m, length))
         v = copy.deepcopy(u)
-        x = zeros((len(x_0), length))
-        xi = zeros((len(quantizer.A), length))
+        x = zeros((len(x_0), length))  # type: ignore
+        xi = zeros((len(A), length))  # type: ignore
         x[:, 0:1] = matrix(x_0)
 
         for i in range(length):
             u[:, i:i + 1] = matrix(self.C2 @ x[:, i:i + 1] + self.D2 @ r[:, i:i + 1])
-            v[:, i:i + 1] = matrix(quantizer.q(quantizer.C @ xi[:, i:i + 1] + u[:, i:i + 1]))
+            v[:, i:i + 1] = matrix(q(C @ xi[:, i:i + 1] + u[:, i:i + 1]))
             z[:, i:i + 1] = matrix(self.C1 @ x[:, i:i + 1] + self.D1 @ r[:, i:i + 1])
             if i < length - 1:
-                xi[:, i + 1:i + 2] = matrix(quantizer.A @ xi[:, i:i + 1] + quantizer.B @ (v[:, i:i + 1] - u[:, i:i + 1]))
+                xi[:, i + 1:i + 2] = matrix(A @ xi[:, i:i + 1] + B @ (v[:, i:i + 1] - u[:, i:i + 1]))
                 x[:, i + 1:i + 2] = matrix(self.A @ x[:, i:i + 1] + self.B1 @ r[:, i:i + 1] + self.B2 @ v[:, i:i + 1])
         return k, u, v, z
 
-    def response(self, input, x_0) -> Tuple[_np.ndarray]:
+    def response(self, input: ArrayLike, x_0: ArrayLike) -> Tuple[NDArrayNum, NDArrayNum, NDArrayNum]:
         """
         Performs a simulation and returns results.
 
@@ -433,7 +443,7 @@ class System():
 
         z = zeros((self.l, length))
         u = zeros((self.m, length))
-        x = zeros((len(x_0), length))
+        x = zeros((len(x_0), length))  # type: ignore
         x[:, 0:1] = matrix(x_0)
 
         for i in range(length):
@@ -445,7 +455,7 @@ class System():
                 )
         return k, u, z
 
-    def __init__(self, A, B1, B2, C1, C2, D1, D2):
+    def __init__(self, A: ArrayLike, B1: ArrayLike, B2: ArrayLike, C1: ArrayLike, C2: ArrayLike, D1: ArrayLike, D2: ArrayLike):
         """
         Initializes an instance of `System`. 'Ideal' means that
         this system doesn't contain a quantizer.
@@ -557,9 +567,9 @@ class System():
         self.D2 = D2_mat
 
         # 解析解用に，内部システムとその接続の仕方を保存
-        self.type = _ConnectionType.ELSE
-        self.P = None
-        self.K = None
+        self.type = ConnectionType.ELSE
+        self.P: Plant | None = None
+        self.K: Controller | None = None
 
     @staticmethod
     def from_FF(P: Plant) -> "System":
@@ -601,7 +611,7 @@ class System():
             D1=zeros(shape=(l, m)),
             D2=eye(m, m),
         )
-        ret.type = _ConnectionType.FF
+        ret.type = ConnectionType.FF
         ret.P = P
         return ret
 
@@ -668,7 +678,7 @@ class System():
         D2 = K.D1
 
         ret = System(A, B1, B2, C1, C2, D1, D2)
-        ret.type = _ConnectionType.FB_WITH_INPUT_QUANTIZER
+        ret.type = ConnectionType.FB_WITH_INPUT_QUANTIZER
         ret.P = P
         ret.K = K
         return ret
@@ -745,7 +755,7 @@ class System():
             D1,
             D2,
         )
-        ret.type = _ConnectionType.FB_WITH_OUTPUT_QUANTIZER
+        ret.type = ConnectionType.FB_WITH_OUTPUT_QUANTIZER
         ret.P = P
         ret.K = K
         return ret
@@ -846,8 +856,8 @@ class System():
             return True
 
     def E(self,
-          Q: _DynamicQuantizer,
-          steptime: Union[int, None] = None,
+          Q: DynamicQuantizer,
+          steptime: int | InfInt = infint,
           _check_stability: bool = True,
           verbose: bool = False) -> float:
         """
@@ -876,12 +886,14 @@ class System():
            quantizers for discrete-valued input control;IEEE Transactions
            on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
         """
-
-        if (steptime is not None) and steptime <= 0:
-            raise ValueError("steptime must be a natural number.")
-        if not _check_stability and steptime is None:
+        steptime = validate_int_or_inf(
+            steptime,
+            minimum=1,
+            name="steptime",
+        )
+        if not _check_stability and steptime is infint:
             raise ValueError(
-                "`(steptime is not None or _check_stability)` must be `True`."
+                "`(not _check_stability and steptime is infint)` must be `False`."
             )
         A_tilde = self.A + self.B2 @ self.C2  # convert to closed loop (only G)
 
@@ -899,17 +911,20 @@ class System():
 
         # E = infinity
         if _check_stability:
-            Qcl = _ctrl.ss(A_bar, B_bar, C_bar, C_bar @ B_bar * 0, True)
+            Qcl: _ctrl.StateSpace = _ctrl.ss(
+                A_bar, B_bar, C_bar, C_bar @ B_bar * 0,  # type: ignore
+                True,
+            )
             Qcl_minreal = Qcl.minreal()
-            if eig_max(Qcl_minreal.A) > 1:
-                return inf
+            if eig_max(Qcl_minreal.A) > 1:  # type: ignore
+                return _np.inf
 
         k = 0
         A_bar_k = eye(*(A_bar.shape))
         sum_CAB = zeros((self.C1.shape[0], self.B2.shape[1]))
-        E_current = 0
-        if steptime is None:
-            k_max = inf
+        E_current = 0.0
+        if steptime is infint:
+            k_max = infint
 
             # smallest k that satisfies
             # `eig_max(A_bar)**k / eig_max(A_bar) < 1e-8`
@@ -932,13 +947,14 @@ class System():
             if k >= k_min:
                 if abs(E_current - E_past) / E_current < 1e-8:
                     break
-            verbose and print(f"k={k}, E_past={E_past}, E_current={E_current}, E_current - E_past={E_current - E_past}")
+            if verbose:
+                print(f"k={k}, E_past={E_past}, E_current={E_current}, E_current - E_past={E_current - E_past}")
             k = k + 1
             A_bar_k = A_bar_k @ A_bar
 
-        return E_current
+        return E_current  # type: ignore
 
-    def is_stable_with_quantizer(self, Q) -> bool:
+    def is_stable_with_quantizer(self, Q: DynamicQuantizer | StaticQuantizer) -> bool:
         """
         Returns stability of this system with quantizer `Q`[1]_.
 
@@ -953,9 +969,11 @@ class System():
            quantizers for discrete-valued input control;IEEE Transactions
            on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
         """
+        if isinstance(Q, StaticQuantizer):
+            return self.is_stable
         return self.is_stable and Q.is_stable
 
-    def is_stable_with(self, Q) -> bool:
+    def is_stable_with(self, Q: DynamicQuantizer | StaticQuantizer) -> bool:
         """
         A shortened form of `is_stable_with_quantizer`.
 

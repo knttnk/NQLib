@@ -25,13 +25,10 @@ jobs:
         auto-update-conda: true
         activate-environment: nqlib-test
         python-version: ${{ matrix.python-version }}
-    - name: Install Slycot
+    - name: Install deps
       run: |
-        conda install -c conda-forge slycot
-    - name: Install other dependencies
-      run: |
-        python -m pip install --upgrade pip
-        python -m pip install .
+        conda install -c conda-forge control slycot cvxpy
+        conda install numpy scipy 
     - name: Test with unittest
       run: |
         python -m unittest discover tests

@@ -42,51 +42,46 @@ def _indent(s: str, num_space: int) -> str:
 
 class Controller(object):
     """
-    An instance of `Controller` represents the state-space model
-    of controller K given by
+    State-space model of a controller K.
+
+    The controller K is given by:
 
         K : { x(t+1) = A x(t) + B1 r(t) + B2 y(t)
             {  u(t)  = C x(t) + D1 r(t) + D2 y(t)
+
+    References
+    ----------
+    .. [5] Y. Minami and T. Muromaki: Differential evolution-based
+        synthesis of dynamic quantizers with fixed-structures; International
+        Journal of Computational Intelligence and Applications, Vol. 15,
+        No. 2, 1650008 (2016)
     """
 
     def __init__(self, A: ArrayLike, B1: ArrayLike, B2: ArrayLike, C: ArrayLike, D1: ArrayLike, D2: ArrayLike):
         """
-        Initializes an instance of `Controller`. You can create an
-        instance of `System` with `Controller`[1]_.
+        Initialize a Controller instance.
 
         Parameters
         ----------
         A : array_like
-            Interpreted as a square matrix.
-            `n` is defined as the number of rows in matrix `A`.
+            State matrix (n x n).
         B1 : array_like
-            Interpreted as a (`n` x `l`) matrix.
-            `l` is defined as the number of columns in matrix `B1`.
+            Input matrix for r (n x l).
         B2 : array_like
-            Interpreted as a (`n` x `p`) matrix.
-            `p` is defined as the number of columns in matrix `B2`.
+            Input matrix for y (n x p).
         C : array_like
-            Interpreted as a (`m` x `n`) matrix.
-            `m` is defined as the number of rows in matrix `C`.
+            Output matrix (m x n).
         D1 : array_like
-            Interpreted as a (`m` x `l`) matrix.
+            Feedthrough matrix for r (m x l).
         D2 : array_like
-            Interpreted as a (`m` x `p`) matrix.
+            Feedthrough matrix for y (m x p).
 
-        Notes
-        -----
-        An instance of `Controller` represents the state-space model
-        of controller K given by
-
-            K : { x(t+1) = A x(t) + B1 r(t) + B2 y(t)
-                {  u(t)  = C x(t) + D1 r(t) + D2 y(t)
-
-        References
-        ----------
-        .. [5] Y. Minami and T. Muromaki: Differential evolution-based
-           synthesis of dynamic quantizers with fixed-structures; International
-           Journal of Computational Intelligence and Applications, Vol. 15,
-           No. 2, 1650008 (2016)
+        Raises
+        ------
+        TypeError
+            If any argument cannot be interpreted as a matrix.
+        ValueError
+            If matrix dimensions are inconsistent.
         """
         try:
             A_mat = matrix(A)
@@ -166,8 +161,9 @@ class Controller(object):
 
 class Plant(object):
     """
-    An instance of `Plant` represents the state-space model
-    of plant P given by
+    State-space model of a plant P.
+
+    The plant P is given by:
 
         P : { x(t+1) =  A x(t) + B u(t)
             {  z(t)  = C1 x(t)
@@ -176,32 +172,25 @@ class Plant(object):
 
     def __init__(self, A: ArrayLike, B: ArrayLike, C1: ArrayLike, C2: ArrayLike):
         """
-        Initializes an instance of `Plant`. You can create an
-        instance of `System` with `Plant`.
+        Initialize a Plant instance.
 
         Parameters
         ----------
         A : array_like
-            Interpreted as a square matrix.
-            `n` is defined as the number of rows in matrix `A`.
+            State matrix (n x n).
         B : array_like
-            Interpreted as a (`n` x `m`) matrix.
-            `m` is defined as the number of columns in matrix `B`.
+            Input matrix (n x m).
         C1 : array_like
-            Interpreted as a (`l1` x `n`) matrix.
-            `l1` is defined as the number of rows in matrix `C1`.
+            Output matrix for z (l1 x n).
         C2 : array_like
-            Interpreted as a (`l2` x `n`) matrix.
-            `l2` is defined as the number of rows in matrix `C2`.
+            Output matrix for y (l2 x n).
 
-        Notes
-        -----
-        An instance of `Plant` represents the state-space model
-        of plant P given by
-
-            P : { x(t+1) =  A x(t) + B u(t)
-                {  z(t)  = C1 x(t)
-                {  y(t)  = C2 x(t)
+        Raises
+        ------
+        TypeError
+            If any argument cannot be interpreted as a matrix.
+        ValueError
+            If matrix dimensions are inconsistent.
 
         References
         ----------
@@ -261,8 +250,7 @@ class Plant(object):
     @staticmethod
     def from_TF(tf: _ctrl.TransferFunction) -> "Plant":
         """
-        Creates an instance of `Plant` from transfer function. Note
-        that `C2` becomes 0 .
+        Create a Plant instance from a transfer function.
 
         Parameters
         ----------
@@ -272,17 +260,7 @@ class Plant(object):
         Returns
         -------
         Plant
-
-        Notes
-        -----
-        An instance of `Plant` represents a plant
-        P given by
-
-            P : { x(t+1) =  A x(t) + B u(t)
-                {  z(t)  = C1 x(t)
-                {  y(t)  = C2 x(t)
-
-        But if you use this method, `C2` becomes `0`.
+            Plant instance with C2 set to zero.
         """
         ss: _ctrl.StateSpace = _ctrl.tf2ss(tf)  # type: ignore
         _C = matrix(ss.C)
@@ -309,8 +287,14 @@ class Plant(object):
 
 class System():
     """
-    Represents ideal system. 'Ideal' means that this system doesn't
-    contain a quantizer.
+    State-space model of an ideal system.
+    Ideal here means that the system does not have a quantizer.
+
+    The system is given by:
+
+        G : { x(t+1) =  A x(t) + B1 r(t) + B2 v(t)
+            {  z(t)  = C1 x(t) + D1 r(t)
+            {  u(t)  = C2 x(t) + D2 r(t)
     """
 
     def __str__(self) -> str:
@@ -365,18 +349,27 @@ class System():
         x_0: ArrayLike,
     ) -> Tuple[NDArrayNum, NDArrayNum, NDArrayNum, NDArrayNum]:
         """
-        Performs a simulation with `quantizer` and returns results.
+        Simulate the system with a quantizer and return results.
 
         Parameters
         ----------
-        quantizer : Union[DynamicQuantizer, StaticQuantizer]
+        quantizer : DynamicQuantizer or StaticQuantizer
+            Quantizer to use in the simulation.
         input : array_like
+            Input signal (reference r).
         x_0 : array_like
+            Initial state vector.
 
         Returns
         -------
-        (t, u, v, z): Tuple[np.ndarray]
-            Time, input, quantized input, and output.
+        t : np.ndarray
+            Time steps.
+        u : np.ndarray
+            Input to quantizer.
+        v : np.ndarray
+            Quantized input.
+        z : np.ndarray
+            Output signal.
 
         References
         ----------
@@ -417,17 +410,23 @@ class System():
 
     def response(self, input: ArrayLike, x_0: ArrayLike) -> Tuple[NDArrayNum, NDArrayNum, NDArrayNum]:
         """
-        Performs a simulation and returns results.
+        Simulate the system and return results.
 
         Parameters
         ----------
         input : array_like
+            Input signal (reference r).
         x_0 : array_like
+            Initial state vector.
 
         Returns
         -------
-        (t, u, z): Tuple[np.ndarray]
-            Time, input, and output.
+        t : np.ndarray
+            Time steps.
+        u : np.ndarray
+            Input signal to plant.
+        z : np.ndarray
+            Output signal.
 
         References
         ----------
@@ -457,38 +456,31 @@ class System():
 
     def __init__(self, A: ArrayLike, B1: ArrayLike, B2: ArrayLike, C1: ArrayLike, C2: ArrayLike, D1: ArrayLike, D2: ArrayLike):
         """
-        Initializes an instance of `System`. 'Ideal' means that
-        this system doesn't contain a quantizer.
+        Initialize a System instance (ideal system without quantizer).
 
         Parameters
         ----------
         A : array_like
-            Interpreted as a square matrix.
-            `n` is defined as the number of rows in matrix `A`.
+            State matrix (n x n).
         B1 : array_like
-            Interpreted as a (`n` x `p`) matrix.
-            `p` is defined as the number of columns in matrix `B1`.
+            Input matrix for r (n x p).
         B2 : array_like
-            Interpreted as a (`n` x `m`) matrix.
-            `m` is defined as the number of columns in matrix `B2`.
+            Input matrix for v (n x m).
         C1 : array_like
-            Interpreted as a (`l` x `n`) matrix.
-            `l` is defined as the number of rows in matrix `C1`.
+            Output matrix for z (l x n).
         C2 : array_like
-            Interpreted as a (`m` x `n`) matrix.
+            Output matrix for u (m x n).
         D1 : array_like
-            Interpreted as a (`l` x `p`) matrix.
+            Feedthrough matrix for r to z (l x p).
         D2 : array_like
-            Interpreted as a (`m` x `p`) matrix.
+            Feedthrough matrix for r to u (m x p).
 
-        Notes
-        -----
-        An instance of `System` represents ideal system
-        G given by
-
-            G : { x(t+1) =  A x(t) + B1 r(t) + B2 v(t)
-                {  z(t)  = C1 x(t) + D1 r(t)
-                {  u(t)  = C2 x(t) + D2 r(t)
+        Raises
+        ------
+        TypeError
+            If any argument cannot be interpreted as a matrix.
+        ValueError
+            If matrix dimensions are inconsistent.
 
         References
         ----------
@@ -574,23 +566,26 @@ class System():
     @staticmethod
     def from_FF(P: Plant) -> "System":
         """
-        Creates an instance of `System` from plant `P`.
-        'from_FF' means that a quantizer is inserted as shown in the
-        following figure[1]_.
+        Create a System instance from a Plant (feedforward connection).
 
-        ```text
-               +-----+  v  +-----+
-         u --->|  Q  |---->|  P  |---> z
-               +-----+     +-----+
+        'from_FF' means that a quantizer is inserted as shown in the
+        following figure.
+        
+        ```
+        >       ┌─────┐  v  ┌─────┐
+        > u ───>│  Q  ├────>│  P  ├───> z
+        >       └─────┘     └─────┘
         ```
 
         Parameters
         ----------
         P : Plant
+            Plant instance.
 
         Returns
         -------
         System
+            System with quantizer inserted before plant (feedforward).
 
         References
         ----------
@@ -621,28 +616,31 @@ class System():
         K: Controller
     ) -> "System":
         """
-        Creates an instance of `System` from plant `P` and
-        controller `K`.
-        'from_FB_connection_with_input_quantizer' means that a
-        quantizer is inserted as shown in the following figure[1]_.
+        Create a System instance from Plant and Controller with input quantizer (feedback connection).
 
-        ```text
-               +-------+     +-------+     +-------+       
-         r --->|       |  u  |       |  v  |       |---> z 
-               |   K   |---->|   Q   |---->|   P   |       
-            +->|       |     |       |     |       |--+    
-            |  +-------+     +-------+     +-------+  | y  
-            +-----------------------------------------+    
+        'from_FB_connection_with_input_quantizer' means that a
+        quantizer is inserted as shown in the following figure.
+
+        ```
+        >       ┌───────┐     ┌───────┐     ┌───────┐       
+        > r ───>│       │  u  │       │  v  │       ├───> z 
+        >       │   K   ├────>│   Q   ├────>│   P   │       
+        >    ┌─>│       │     │       │     │       ├──┐    
+        >    │  └───────┘     └───────┘     └───────┘  │ y  
+        >    └─────────────────────────────────────────┘    
         ```
 
         Parameters
         ----------
         P : Plant
+            Plant instance.
         K : Controller
+            Controller instance.
 
         Returns
         -------
         System
+            System with quantizer inserted at controller input (feedback).
 
         References
         ----------
@@ -689,29 +687,32 @@ class System():
         K: Controller
     ) -> "System":
         """
-        Creates an instance of `System` from plant `P` and
-        controller `K`.
-        'from_FB_connection_with_output_quantizer' means that a
-        quantizer is inserted as shown in the following figure[1]_.
+        Create a System instance from Plant and Controller with output quantizer (feedback connection).
 
-        ```text
-               +-------+           +-------+       
-         r --->|       |           |       |---> z 
-               |   K   |---------->|   P   |       
-            +->|       |           |       |--+    
-          v |  +-------+  +-----+  +-------+  | u  
-            +-------------|  Q  |<------------+    
-                          +-----+                  
+        'from_FB_connection_with_output_quantizer' means that a
+        quantizer is inserted as shown in the following figure.
+
+        ```
+        >       ┌───────┐           ┌───────┐       
+        > r ───>│       │           │       ├───> z 
+        >       │   K   ├──────────>│   P   │       
+        >    ┌─>│       │           │       ├──┐    
+        >  v │  └───────┘  ┌─────┐  └───────┘  │ u  
+        >    └─────────────┤  Q  │<────────────┘    
+        >                  └─────┘
         ```
 
         Parameters
         ----------
         P : Plant
+            Plant instance.
         K : Controller
+            Controller instance.
 
         Returns
         -------
         System
+            System with quantizer inserted at controller output (feedback).
 
         References
         ----------
@@ -766,36 +767,19 @@ class System():
         K: Controller
     ) -> "System":
         """
-        A shortened form of `from_FB_connection_with_input_quantizer`.
-
-        Creates an instance of `System` from plant `P` and
-        controller `K`.
-        'from_FB_connection_with_input_quantizer' means that a
-        quantizer is inserted as shown in the following figure[1]_.
-
-        ```text
-               +-------+     +-------+     +-------+       
-         r --->|       |  u  |       |  v  |       |---> z 
-               |   K   |---->|   Q   |---->|   P   |       
-            +->|       |     |       |     |       |--+    
-            |  +-------+     +-------+     +-------+  | y  
-            +-----------------------------------------+    
-        ```
+        Alias for from_FB_connection_with_input_quantizer.
 
         Parameters
         ----------
         P : Plant
+            Plant instance.
         K : Controller
+            Controller instance.
 
         Returns
         -------
         System
-
-        References
-        ----------
-        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
-           quantizers for discrete-valued input control;IEEE Transactions
-           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
+            System with quantizer inserted at controller input (feedback).
         """
         return System.from_FB_connection_with_input_quantizer(P, K)
 
@@ -805,49 +789,31 @@ class System():
         K: Controller
     ) -> "System":
         """
-        A shortened form of `from_FB_connection_with_output_quantizer`.
-
-        Creates an instance of `System` from plant `P` and
-        controller `K`.
-        'from_FB_connection_with_output_quantizer' means that a
-        quantizer is inserted as shown in the following figure[1]_.
-
-        ```text
-               +-------+           +-------+       
-         r --->|       |           |       |---> z 
-               |   K   |---------->|   P   |       
-            +->|       |           |       |--+    
-          v |  +-------+  +-----+  +-------+  | u  
-            +-------------|  Q  |<------------+    
-                          +-----+                  
-        ```
+        Alias for from_FB_connection_with_output_quantizer.
 
         Parameters
         ----------
         P : Plant
+            Plant instance.
         K : Controller
+            Controller instance.
 
         Returns
         -------
         System
-
-        References
-        ----------
-        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
-           quantizers for discrete-valued input control;IEEE Transactions
-           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
+            System with quantizer inserted at controller output (feedback).
         """
         return System.from_FB_connection_with_output_quantizer(P, K)
 
     @property
     def is_stable(self) -> bool:
         """
-        Returns stability of this system.
+        Check if the closed-loop system is stable.
 
         Returns
         -------
         bool
-            `True` if stable, `False` if not.
+            True if stable, False otherwise.
         """
         A_tilde = self.A + self.B2 @ self.C2  # convert to closed loop
         if eig_max(A_tilde) > 1:
@@ -861,24 +827,24 @@ class System():
           _check_stability: bool = True,
           verbose: bool = False) -> float:
         """
-        Returns estimation of E(Q).
+        Estimate E(Q) for the system and quantizer.
 
         Parameters
         ----------
         Q : DynamicQuantizer
-        steptime : int or None, optional
-            Evaluation time. Must be a natural number.
-            (The default is `None`, which implies that this function
-            calculates until convergence.)
+            Dynamic quantizer instance.
+        steptime : int or InfInt, optional
+            Evaluation time (default: infint). Must be a natural number.
         _check_stability : bool, optional
+            If True, check stability (default: True).
             This shouldn't be changed.
-            `(steptime is not None or _check_stability)` must be `True`.
-            (The default is `True`.)
+        verbose : bool, optional
+            If True, print progress (default: False).
 
         Returns
         -------
         float
-            Estimation of E(Q) in `steptime`.
+            Estimated value of E(Q) in the given steptime.
 
         References
         ----------
@@ -956,12 +922,17 @@ class System():
 
     def is_stable_with_quantizer(self, Q: DynamicQuantizer | StaticQuantizer) -> bool:
         """
-        Returns stability of this system with quantizer `Q`[1]_.
+        Check if the system is stable with the given quantizer.
+
+        Parameters
+        ----------
+        Q : DynamicQuantizer or StaticQuantizer
+            Quantizer instance.
 
         Returns
         -------
         bool
-            `True` if stable, `False` if not.
+            True if stable, False otherwise.
 
         References
         ----------
@@ -975,14 +946,17 @@ class System():
 
     def is_stable_with(self, Q: DynamicQuantizer | StaticQuantizer) -> bool:
         """
-        A shortened form of `is_stable_with_quantizer`.
+        Alias for is_stable_with_quantizer.
 
-        Returns stability of this system with quantizer `Q`[1]_.
+        Parameters
+        ----------
+        Q : DynamicQuantizer or StaticQuantizer
+            Quantizer instance.
 
         Returns
         -------
         bool
-            `True` if stable, `False` if not.
+            True if stable, False otherwise.
 
         References
         ----------

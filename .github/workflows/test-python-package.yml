@@ -14,7 +14,7 @@ defaults:
     shell: bash -el {0}
 jobs:
   test:
-    name: Test with (${{ matrix.python-version }}
+    name: Test with Python ${{ matrix.python-version }}, control ${{ matrix.control-version }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

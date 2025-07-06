@@ -87,7 +87,7 @@ class NQLibTest(unittest.TestCase):
         Q_5, E_5 = nqlib.DynamicQuantizer.design_GD(ideal_system,
                                                     q=q,
                                                     dim=5,
-                                                    verbose=True)
+                                                    verbose=False)
         # BUG: GDで勾配が0になるのか最適化がされず係数が全て0になることがある
         Q_1 = Q_5.order_reduced(1)
         Q_1D = nqlib.order_reduced(Q_5, 1)

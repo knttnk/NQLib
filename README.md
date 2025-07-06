@@ -1,27 +1,34 @@
-# **Welcome to NQLib**
-NQLib is a 
+# Welcome to NQLib
+
+NQLib is a
 <a href="https://www.python.org/" target="_blank">Python</a>
 library to design noise shaping quantizer for discrete-valued input control.
 
-# **What can I do with NQLib?**
+# What can I do with NQLib?
+
 In the real world, a dynamic system may have to be controlled by discrete-valued signals due to the inclusion of actuators that are driven by ON/OFF or network with capacity limitations. In such a case, a good output may be obtained by converting continuous-valued input to discrete-valued input with a quantizer designed by NQLib.
 
-## **Example**
+## Example
+
 See
 <a href="https://colab.research.google.com/drive/1Ui-XqaTZCjwqRXC3ZeMeMCbPqGxK9YXO" target="_blank">here</a>.
 
-# **Install**
+# Install
+
 You can install NQLib by using pip
+
 ```
 pip install nqlib
 ```
 
 or conda.
+
 ```
 conda install -c conda-forge nqlib
 ```
 
-# **References**
+# References
+
 NQLib is a Python library version of
 <a href="https://github.com/rmorita-jp/odqtoolbox" target="_blank">ODQ Toolbox</a>,
 which were developed in
@@ -39,6 +46,6 @@ The algorithms used in NQLib are based on the following paper.
 
 - [5] Y. Minami and T. Muromaki: Differential evolution-based synthesis of dynamic quantizers with fixed-structures; International Journal of Computational Intelligence and Applications, Vol. 15, No. 2, 1650008 (2016)
 
-
 # License
+
 This software is released under the MIT License, see LICENSE.txt.

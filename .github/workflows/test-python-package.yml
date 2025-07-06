@@ -10,27 +10,28 @@ on:
     branches: [ "main" ]
 
 jobs:
+  default-shell:
+    name: Default shell
+    runs-on: "ubuntu-latest"
+    defaults:
+      run:
+        shell: bash -el {0}
   build:
-
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
-
     steps:
     - uses: actions/checkout@v4
     - uses: conda-incubator/setup-miniconda@v3
       with:
         auto-update-conda: true
-        activate-environment: nqlib-test
         python-version: ${{ matrix.python-version }}
     - name: Install deps
       run: |
-        conda activate nqlib-test
         conda install -c conda-forge control slycot cvxpy -y
         conda install numpy scipy -y
     - name: Test with unittest
       run: |
-        conda activate nqlib-test
         python -m unittest discover tests

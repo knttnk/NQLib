@@ -1,6 +1,6 @@
 # NQLib
 
-[![Python package](https://github.com/knttnk/NQLib/actions/workflows/test-python-package.yml/badge.svg)](https://github.com/knttnk/NQLib/actions/workflows/test-python-package.yml)
+[![Test NQLib](https://github.com/knttnk/NQLib/actions/workflows/test-python-package.yml/badge.svg)](https://github.com/knttnk/NQLib/actions/workflows/test-python-package.yml)
 
 NQLib is a <a href="https://www.python.org/" target="_blank">Python</a> library to design noise shaping quantizer for discrete-valued input control.
 

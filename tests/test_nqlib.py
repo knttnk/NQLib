@@ -84,10 +84,12 @@ class NQLibTest(unittest.TestCase):
         )
 
         q = nqlib.StaticQuantizer.mid_tread(d=2)
-        Q_5, E_5 = nqlib.DynamicQuantizer.design_GD(ideal_system,
-                                                    q=q,
-                                                    dim=5,
-                                                    verbose=False)
+        Q_5, E_5 = nqlib.DynamicQuantizer.design_GD(
+            ideal_system,
+            q=q,
+            dim=5,
+            verbose=False,
+        )
         # BUG: GDで勾配が0になるのか最適化がされず係数が全て0になることがある
         Q_1 = Q_5.order_reduced(1)
         Q_1D = nqlib.order_reduced(Q_5, 1)
@@ -127,8 +129,27 @@ class NQLibTest(unittest.TestCase):
 
     def test_mid_tread(self):
         import nqlib
-        d = rand() * 10 + 0.1
-        q = nqlib.StaticQuantizer.mid_tread(d, 3, error_on_excess=True)
+        d = abs(rand() * 10 + 0.1)
+
+        # validate construction
+        with self.assertRaises(TypeError):
+            q = nqlib.StaticQuantizer.mid_tread(
+                d="12"  # type: ignore
+            )
+        with self.assertRaises(TypeError):
+            q = nqlib.StaticQuantizer.mid_tread(
+                d=d,
+                bit=3.1,  # type: ignore
+            )
+        with self.assertRaises(ValueError):
+            q = nqlib.StaticQuantizer.mid_tread(
+                d=-d  # type: ignore
+            )
+        q = nqlib.StaticQuantizer.mid_tread(
+            numpy.float64(d),
+            3,
+            error_on_excess=True,
+        )
 
         self.assertEqual(q(0), 0)
         self.assertEqual(q(d / 4), 0)
@@ -149,6 +170,19 @@ class NQLibTest(unittest.TestCase):
     def test_mid_riser(self):
         import nqlib
         d = rand() * 10 + 0.1
+        with self.assertRaises(TypeError):
+            q = nqlib.StaticQuantizer.mid_riser(
+                d="1"  # type: ignore
+            )
+        with self.assertRaises(TypeError):
+            q = nqlib.StaticQuantizer.mid_riser(
+                d=d,
+                bit=3.1,  # type: ignore
+            )
+        with self.assertRaises(ValueError):
+            q = nqlib.StaticQuantizer.mid_riser(
+                d=-d  # type: ignore
+            )
         q = nqlib.StaticQuantizer.mid_riser(d, 3, error_on_excess=True)
 
         self.assertEqual(q(0.1), d / 2)
@@ -166,6 +200,86 @@ class NQLibTest(unittest.TestCase):
 
         q = nqlib.StaticQuantizer.mid_riser(d)
         self.assertEqual(q(2.5 * d), 2.5 * d)
+
+    def test_static_quantizer(self):
+        import nqlib
+        d = rand() * 10 + 0.1
+        with self.assertRaises(TypeError):
+            q = nqlib.StaticQuantizer(
+                lambda x: x,
+                delta="r",
+            )
+        with self.assertRaises(ValueError):
+            q = nqlib.StaticQuantizer(
+                lambda x: x,
+                delta=-d,
+            )
+        with self.assertRaises(TypeError):
+            q = nqlib.StaticQuantizer(
+                "lambda x: x",
+                delta=d,
+            )
+        q = nqlib.StaticQuantizer(
+            lambda x: 0,
+            delta=0.1,
+            error_on_excess=True,
+        )
+        with self.assertRaises(ValueError):
+            q(-10)
+        q = nqlib.StaticQuantizer(
+            lambda x: 0,
+            delta=0.1,
+            error_on_excess=False,
+        )
+        q(10)
+
+    def test_dynamic_quantizer(self):
+        import nqlib
+        q = nqlib.StaticQuantizer.mid_tread(1)
+        with self.assertRaises(TypeError):
+            Q = nqlib.DynamicQuantizer(
+                "A", "B", "C", q
+            )
+
+    def test_system(self):
+        import nqlib
+        A = numpy.array([[1.15, 0.05],
+                         [0.00, 0.99]])
+        B2 = numpy.array([[0.004],
+                          [0.099]])
+        C2 = numpy.array([-15., -3.], ndmin=2)
+        D_shape = (1, 1)
+
+        ideal_system = nqlib.System(
+            A=A,
+            B1=numpy.random.randn(*B2.shape),
+            B2=B2,
+            C1=numpy.random.randn(*C2.shape),
+            C2=C2,
+            D1=numpy.random.randn(*D_shape),
+            D2=numpy.random.randn(*D_shape),
+        )
+
+        with self.assertRaises(TypeError):
+            nqlib.System(
+                A="A",
+                B1=numpy.random.randn(*B2.shape),
+                B2=B2,
+                C1=numpy.random.randn(*C2.shape),
+                C2=C2,
+                D1=numpy.random.randn(*D_shape),
+                D2=numpy.random.randn(*D_shape),
+            )
+        with self.assertRaises(ValueError):
+            nqlib.System(
+                A=[1],
+                B1=numpy.random.randn(*B2.shape),
+                B2=B2,
+                C1=numpy.random.randn(*C2.shape),
+                C2=C2,
+                D1=numpy.random.randn(*D_shape),
+                D2=numpy.random.randn(*D_shape),
+            )
 
     def test_AG_serial_decomposition(self):
         import nqlib

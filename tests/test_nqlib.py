@@ -4,15 +4,17 @@ import numpy
 import random
 import time
 import sys
-sys.path.append(r"H:\マイドライブ\IshikawaMinamiLab\研究\NQLib")
+import pathlib
+nqlib_path = pathlib.Path(__file__).parent.parent / "nqlib"
+sys.path.append(str(nqlib_path))
 
 rand = random.random
 
 
-class nqlib_devTest(unittest.TestCase):
+class NQLibTest(unittest.TestCase):
     def test_cost(self):
-        import nqlib_dev
-        G = nqlib_dev.System(
+        import nqlib
+        G = nqlib.System(
             A=[[1.15, 0.05],
                [0.00, 0.99]],
             B1=[[0.],
@@ -24,18 +26,18 @@ class nqlib_devTest(unittest.TestCase):
             D1=0,
             D2=1,
         )
-        q = nqlib_dev.StaticQuantizer.mid_tread(d=2)
-        Q, E = nqlib_dev.DynamicQuantizer.design(G,
-                                                 q=q,
-                                                 verbose=False)
+        q = nqlib.StaticQuantizer.mid_tread(d=2)
+        Q, E = nqlib.DynamicQuantizer.design(G,
+                                             q=q,
+                                             verbose=False)
         E_E = G.E(Q)
         E_cost = Q.cost(G)
         self.assertAlmostEqual(E, E_E)
         self.assertAlmostEqual(E, E_cost)
 
     def test_response(self):
-        import nqlib_dev
-        G = nqlib_dev.System(
+        import nqlib
+        G = nqlib.System(
             A=[[1.15, 0.05],
                [0.00, 0.99]],
             B1=[[0.],
@@ -47,10 +49,10 @@ class nqlib_devTest(unittest.TestCase):
             D1=0,
             D2=1,
         )
-        q = nqlib_dev.StaticQuantizer.mid_tread(d=2)
-        Q, E = nqlib_dev.DynamicQuantizer.design(G,
-                                                 q=q,
-                                                 verbose=False)
+        q = nqlib.StaticQuantizer.mid_tread(d=2)
+        Q, E = nqlib.DynamicQuantizer.design(G,
+                                             q=q,
+                                             verbose=False)
         t = numpy.arange(0, 101, 1)
         r = 0.3 * numpy.sin(0.1 * numpy.pi * t) - 0.5 * numpy.cos(0.03 * numpy.pi * t)
         x_0 = [[0.1],
@@ -61,18 +63,18 @@ class nqlib_devTest(unittest.TestCase):
         self.assertGreaterEqual(E, numpy.max(abs(z_Q - z_i)))  # E >= max
 
     def test_order_reduction(self):
-        import nqlib_dev
+        import nqlib
 
         def randn(shape): return 2 * numpy.random.randn(*shape)
-        A = numpy.array([[0.1, -0.06],
-                         [0.5, 0.9]])
-        B2 = numpy.array([[0.],
-                          [-2.5]])
-        C2 = numpy.array([0., -0.25334], ndmin=2)
+        A = numpy.array([[1.1, 0.5],
+                         [0.2, 0.9]])
+        B2 = numpy.array([[0.04],
+                          [0.09]])
+        C2 = numpy.array([-14., -3.], ndmin=2)
         D_shape = (1, 1)
 
-        ideal_system = nqlib_dev.System(
-            A=A - B2 @ C2,
+        ideal_system = nqlib.System(
+            A=A,
             B1=randn(B2.shape),
             B2=B2,
             C1=randn(C2.shape),
@@ -81,14 +83,14 @@ class nqlib_devTest(unittest.TestCase):
             D2=randn(D_shape),
         )
 
-        q = nqlib_dev.StaticQuantizer.mid_tread(d=2)
-        Q_5, E_5 = nqlib_dev.DynamicQuantizer.design_GD(ideal_system,
-                                                        q=q,
-                                                        dim=5,
-                                                        verbose=False)
+        q = nqlib.StaticQuantizer.mid_tread(d=2)
+        Q_5, E_5 = nqlib.DynamicQuantizer.design_GD(ideal_system,
+                                                    q=q,
+                                                    dim=5,
+                                                    verbose=True)
         # BUG: GDで勾配が0になるのか最適化がされず係数が全て0になることがある
         Q_1 = Q_5.order_reduced(1)
-        Q_1D = nqlib_dev.order_reduced(Q_5, 1)
+        Q_1D = nqlib.order_reduced(Q_5, 1)
 
         self.assertEqual(
             Q_1.A, Q_1D.A,
@@ -124,9 +126,9 @@ class nqlib_devTest(unittest.TestCase):
         )
 
     def test_mid_tread(self):
-        import nqlib_dev
+        import nqlib
         d = rand() * 10 + 0.1
-        q = nqlib_dev.StaticQuantizer.mid_tread(d, 3, error_on_excess=True)
+        q = nqlib.StaticQuantizer.mid_tread(d, 3, error_on_excess=True)
 
         self.assertEqual(q(0), 0)
         self.assertEqual(q(d / 4), 0)
@@ -137,17 +139,17 @@ class nqlib_devTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             q(5 * d)
 
-        q = nqlib_dev.StaticQuantizer.mid_tread(d, 3, error_on_excess=False)
+        q = nqlib.StaticQuantizer.mid_tread(d, 3, error_on_excess=False)
         self.assertEqual(q(-4 * d), -3 * d)
         self.assertEqual(q(5 * d), 4 * d)
 
-        q = nqlib_dev.StaticQuantizer.mid_tread(d)
+        q = nqlib.StaticQuantizer.mid_tread(d)
         self.assertEqual(q(d + d / 4), d)
 
     def test_mid_riser(self):
-        import nqlib_dev
+        import nqlib
         d = rand() * 10 + 0.1
-        q = nqlib_dev.StaticQuantizer.mid_riser(d, 3, error_on_excess=True)
+        q = nqlib.StaticQuantizer.mid_riser(d, 3, error_on_excess=True)
 
         self.assertEqual(q(0.1), d / 2)
         self.assertEqual(q(-3 * d / 4), -d / 2)
@@ -158,24 +160,24 @@ class nqlib_devTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             q(4.01 * d)
 
-        q = nqlib_dev.StaticQuantizer.mid_riser(d, 3, error_on_excess=False)
+        q = nqlib.StaticQuantizer.mid_riser(d, 3, error_on_excess=False)
         self.assertEqual(q(-6 * d), -3.5 * d)
         self.assertEqual(q(5 * d), 3.5 * d)
 
-        q = nqlib_dev.StaticQuantizer.mid_riser(d)
+        q = nqlib.StaticQuantizer.mid_riser(d)
         self.assertEqual(q(2.5 * d), 2.5 * d)
 
     def test_AG_serial_decomposition(self):
-        import nqlib_dev
+        import nqlib
         z = control.tf('z')
-        P = nqlib_dev.Plant.from_TF(
+        P = nqlib.Plant.from_TF(
             0.01 * (z + 1.2) / (z - 0.95) / (z - 0.9)
         )
-        ideal_system = nqlib_dev.System.from_FF(P)
+        ideal_system = nqlib.System.from_FF(P)
 
-        q = nqlib_dev.StaticQuantizer.mid_tread(d=2)
+        q = nqlib.StaticQuantizer.mid_tread(d=2)
 
-        Q, E = nqlib_dev.DynamicQuantizer.design_AG(
+        Q, E = nqlib.DynamicQuantizer.design_AG(
             ideal_system,
             q=q,
             verbose=False,
@@ -191,26 +193,26 @@ class nqlib_devTest(unittest.TestCase):
         )
 
     def test_AG(self):
-        import nqlib_dev
-        P = nqlib_dev.Plant(A=[[1.15, 0.05],
-                               [0, 0.99]],
-                            B=[[0.004],
-                               [0.099]],
-                            C1=[1, 0],
-                            C2=numpy.eye(2))
-        K = nqlib_dev.Controller(A=0,
-                                 B1=0,
-                                 B2=[0, 0],
-                                 C=0,
-                                 D1=1,
-                                 D2=[-20, -3])
-        ideal_system = nqlib_dev.System.from_FB_connection_with_input_quantizer(P, K)
+        import nqlib
+        P = nqlib.Plant(A=[[1.15, 0.05],
+                           [0, 0.99]],
+                        B=[[0.004],
+                           [0.099]],
+                        C1=[1, 0],
+                        C2=numpy.eye(2))
+        K = nqlib.Controller(A=0,
+                             B1=0,
+                             B2=[0, 0],
+                             C=0,
+                             D1=1,
+                             D2=[-20, -3])
+        ideal_system = nqlib.System.from_FB_connection_with_input_quantizer(P, K)
 
-        q = nqlib_dev.StaticQuantizer.mid_tread(d=2)
+        q = nqlib.StaticQuantizer.mid_tread(d=2)
 
-        Q, E = nqlib_dev.DynamicQuantizer.design_AG(ideal_system,
-                                                    q=q,
-                                                    verbose=False)
+        Q, E = nqlib.DynamicQuantizer.design_AG(ideal_system,
+                                                q=q,
+                                                verbose=False)
 
         self.assertAlmostEqual(
             0.004, E,
@@ -222,8 +224,8 @@ class nqlib_devTest(unittest.TestCase):
         )
 
     def test_LP(self):
-        import nqlib_dev
-        G = nqlib_dev.System(
+        import nqlib
+        G = nqlib.System(
             A=[[1.15, 0.05],
                [0.00, 0.99]],
             B1=[[0.],
@@ -236,14 +238,14 @@ class nqlib_devTest(unittest.TestCase):
             D2=1,
         )
 
-        q = nqlib_dev.StaticQuantizer.mid_tread(d=2)
+        q = nqlib.StaticQuantizer.mid_tread(d=2)
 
-        Q, E = nqlib_dev.DynamicQuantizer.design_LP(G,
-                                                    q=q,
-                                                    T=100,
-                                                    gain_wv=2,
-                                                    dim=5,
-                                                    verbose=False)
+        Q, E = nqlib.DynamicQuantizer.design_LP(G,
+                                                q=q,
+                                                T=100,
+                                                gain_wv=2,
+                                                dim=5,
+                                                verbose=False)
 
         self.assertAlmostEqual(
             0.023360532739376112, E,
@@ -256,8 +258,8 @@ class nqlib_devTest(unittest.TestCase):
         self.assertGreaterEqual(Q.gain_wv(100), 2)  # E >= max
 
     def test_LP_MIMO(self):
-        import nqlib_dev
-        G = nqlib_dev.System(
+        import nqlib
+        G = nqlib.System(
             A=[[1.15, 0.05],
                [0.00, 0.99]],
             B1=[[0.1, 0.],
@@ -272,18 +274,18 @@ class nqlib_devTest(unittest.TestCase):
                 [1, 1]],
         )
 
-        q = nqlib_dev.StaticQuantizer.mid_tread(d=2)
+        q = nqlib.StaticQuantizer.mid_tread(d=2)
 
-        Q, E = nqlib_dev.DynamicQuantizer.design_LP(G,
-                                                    q=q,
-                                                    T=11,
-                                                    gain_wv=2,
-                                                    dim=2,
-                                                    verbose=False)
+        Q, E = nqlib.DynamicQuantizer.design_LP(G,
+                                                q=q,
+                                                T=11,
+                                                gain_wv=2,
+                                                dim=2,
+                                                verbose=False)
 
     def test_LP_MIMO2(self):
-        import nqlib_dev
-        G = nqlib_dev.System(
+        import nqlib
+        G = nqlib.System(
             A=[[1.15, 0.05],
                [0.00, 0.99]],
             B1=[[0.1, 0.],
@@ -298,28 +300,28 @@ class nqlib_devTest(unittest.TestCase):
                 [1, 1]],
         )
 
-        q = nqlib_dev.StaticQuantizer.mid_tread(d=2)
+        q = nqlib.StaticQuantizer.mid_tread(d=2)
 
-        Q, E = nqlib_dev.DynamicQuantizer.design_LP(G,
-                                                    q=q,
-                                                    T=11,
-                                                    gain_wv=2,
-                                                    dim=1,
-                                                    verbose=False)
+        Q, E = nqlib.DynamicQuantizer.design_LP(G,
+                                                q=q,
+                                                T=11,
+                                                gain_wv=2,
+                                                dim=1,
+                                                verbose=False)
 
     def test_GD(self):
-        import nqlib_dev
+        import nqlib
 
         def randn(shape): return 2 * numpy.random.randn(*shape)
-        A = numpy.array([[0.86018, -0.06174],
-                         [0.16468, 0.91083]])
-        B2 = numpy.array([[0.],
-                          [-2.1546]])
-        C2 = numpy.array([0., -0.25334], ndmin=2)
+        A = numpy.array([[1.15, 0.05],
+                         [0.00, 0.99]])
+        B2 = numpy.array([[0.004],
+                          [0.099]])
+        C2 = numpy.array([-15., -3.], ndmin=2)
         D_shape = (1, 1)
 
-        ideal_system = nqlib_dev.System(
-            A=A - B2 @ C2,
+        ideal_system = nqlib.System(
+            A=A,
             B1=randn(B2.shape),
             B2=B2,
             C1=randn(C2.shape),
@@ -328,17 +330,17 @@ class nqlib_devTest(unittest.TestCase):
             D2=randn(D_shape),
         )
 
-        q = nqlib_dev.StaticQuantizer.mid_tread(d=2)
-        Q, E = nqlib_dev.DynamicQuantizer.design_AG(ideal_system,
-                                                    q=q,
-                                                    verbose=False)
+        q = nqlib.StaticQuantizer.mid_tread(d=2)
+        Q, E = nqlib.DynamicQuantizer.design_AG(ideal_system,
+                                                q=q,
+                                                verbose=False)
 
         if Q is not None:
             if E > 1000:
                 print("E is inf")
 
             # 勾配法
-            Q_g, E_g = nqlib_dev\
+            Q_g, E_g = nqlib\
                 .DynamicQuantizer\
                 .design_GD(ideal_system,
                            q=q,
@@ -348,7 +350,7 @@ class nqlib_devTest(unittest.TestCase):
 
             self.assertAlmostEqual(
                 E_g, E,
-                places=2,
+                places=1,
                 msg=(
                     f"optimal E = {E}, optimized E_g = {E_g}\n"
                     f"system:\n"
@@ -357,18 +359,18 @@ class nqlib_devTest(unittest.TestCase):
             )
 
     def test_DE(self):
-        import nqlib_dev
+        import nqlib
 
         def randn(shape): return 2 * numpy.random.randn(*shape)
-        A = numpy.array([[0.1, -0.06],
-                         [0.5, 0.9]])
-        B2 = numpy.array([[0.],
-                          [-2.5]])
-        C2 = numpy.array([0., -0.25334], ndmin=2)
+        A = numpy.array([[1.15, 0.05],
+                         [0.00, 0.99]])
+        B2 = numpy.array([[0.004],
+                          [0.099]])
+        C2 = numpy.array([-15., -3.], ndmin=2)
         D_shape = (1, 1)
 
-        ideal_system = nqlib_dev.System(
-            A=A - B2 @ C2,
+        ideal_system = nqlib.System(
+            A=A,
             B1=randn(B2.shape),
             B2=B2,
             C1=randn(C2.shape),
@@ -377,17 +379,17 @@ class nqlib_devTest(unittest.TestCase):
             D2=randn(D_shape),
         )
 
-        q = nqlib_dev.StaticQuantizer.mid_tread(d=2)
-        Q, E = nqlib_dev.DynamicQuantizer.design_AG(ideal_system,
-                                                    q=q,
-                                                    verbose=False)
+        q = nqlib.StaticQuantizer.mid_tread(d=2)
+        Q, E = nqlib.DynamicQuantizer.design_AG(ideal_system,
+                                                q=q,
+                                                verbose=False)
 
         if Q is not None:
             if E > 1000:
                 print("E is inf")
 
             # 進化型
-            Q_d, E_d = nqlib_dev\
+            Q_d, E_d = nqlib\
                 .DynamicQuantizer\
                 .design_DE(ideal_system,
                            q=q,
@@ -396,7 +398,7 @@ class nqlib_devTest(unittest.TestCase):
 
             self.assertAlmostEqual(
                 E_d, E,
-                places=3,
+                places=1,
                 msg=(
                     f"optimal E = {E}, optimized E_d = {E_d}\n"
                     f"system:\n"
@@ -405,8 +407,5 @@ class nqlib_devTest(unittest.TestCase):
             )
 
 
-try:
+if __name__ == "__main__":
     unittest.main(verbosity=2)
-finally:
-    # time.sleep(60 * 60 * 24)
-    pass

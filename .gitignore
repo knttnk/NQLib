@@ -7,6 +7,7 @@ nqlib_dev
 nqlib.egg-info
 online-documentation
 article
+manual_tests
 
 # キャッシュ
 __pycache__

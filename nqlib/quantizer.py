@@ -38,20 +38,18 @@ __all__ = [
 
 class ConnectionType(_Enum):
     """
-    Inherits from `enum.Enum`.
-    This class represents how system is connected.
-    Each values correspond to following methods.
+    Enum for system connection types.
 
-    See Also
-    --------
-    nqlib.System.from_FF()
-        Corresponds to `_ConnectionType.FF`.
-    nqlib.System.from_FB_connection_with_input_quantizer()
-        Corresponds to `_ConnectionType.FB_WITH_INPUT_QUANTIZER`.
-    nqlib.System.from_FB_connection_with_output_quantizer()
-        Corresponds to `_ConnectionType.FB_WITH_OUTPUT_QUANTIZER`.
-    nqlib.System()
-        Corresponds to `_ConnectionType.ELSE`.
+    Attributes
+    ----------
+    FF : enum
+        Feedforward connection.
+    FB_WITH_INPUT_QUANTIZER : enum
+        Feedback with input quantizer.
+    FB_WITH_OUTPUT_QUANTIZER : enum
+        Feedback with output quantizer.
+    ELSE : enum
+        Other connection types.
     """
     FF = _auto()
     FB_WITH_INPUT_QUANTIZER = _auto()
@@ -61,7 +59,7 @@ class ConnectionType(_Enum):
 
 class StaticQuantizer():
     """
-    Represents static quantizer.
+    Static quantizer.
     """
 
     def __init__(self,
@@ -70,19 +68,25 @@ class StaticQuantizer():
                  *,
                  error_on_excess: bool = True):
         """
-        Initializes an instance of `StaticQuantizer`.
+        Initialize a StaticQuantizer instance.
 
         Parameters
         ----------
         function : Callable[[NDArrayNum], NDArrayNum]
-            For simulation. This function returns quantized value
-            derived from input.
+            Quantization function.
         delta : float
-            Max of `abs(function(u) - u)`.
+            Maximum allowed quantization error.
         error_on_excess : bool, optional
-            Whether to raise an error when
+            If True, raise error when error exceeds delta (default: True).
+            i.e. whether to raise an error when
             `numpy.max(abs(function(u) - u)) > delta` becomes `True`.
-            (The default is `True`).
+
+        Raises
+        ------
+        TypeError
+            If function is not callable.
+        ValueError
+            If quantization error exceeds delta and error_on_excess is True.
         """
         self.delta = validate_float(
             delta,
@@ -130,31 +134,32 @@ class StaticQuantizer():
 
     def __call__(self, u: NDArrayNum) -> NDArrayNum:
         """
-        Calls `self.quantize`.
+        Call quantize method.
+
+        Parameters
+        ----------
+        u : NDArrayNum
+            Input signal.
+
+        Returns
+        -------
+        NDArrayNum
+            Quantized signal.
         """
         return self.quantize(u)
 
     def quantize(self, u: NDArrayNum) -> NDArrayNum:
         """
-        Quantizes the input signal `u`.
-        Returns v in the following figure.
-
-        ```
-               +-----+       
-         u --->|  q  |---> v 
-               +-----+       
-        ```
-
-        "q" in this figure means this quantizer.
+        Quantize the input signal.
 
         Parameters
         ----------
-        u : array_like
+        u : NDArrayNum
             Input signal.
 
         Returns
         -------
-        v : np.ndarray
+        NDArrayNum
             Quantized signal.
         """
         return self._function(u)
@@ -165,24 +170,24 @@ class StaticQuantizer():
                   *,
                   error_on_excess: bool = True) -> "StaticQuantizer":
         """
-        Creates an mid-tread uniform `StaticQuantizer` `q`.
+        Create a mid-tread uniform StaticQuantizer.
 
         Parameters
         ----------
         d : float
-            Quantization step size. Must be greater than `0`.
-        bit : None or int, optional
-            Number of bits.
-            (The default is `None`, which means infinity.)
+            Quantization step size (>0).
+        bit : int or InfInt, optional
+            Number of bits (default: infint).
         error_on_excess : bool, optional
-            Whether to raise an error when
+            If True, raise error when error exceeds delta (default: True).
+            i.e. whether to raise an error when
             `numpy.max(abs(function(u) - u)) > delta` becomes `True`.
             (The default is `True`).
 
         Returns
         -------
-        q : StaticQuantizer
-            Mid-tread uniform `StaticQuantizer`.
+        StaticQuantizer
+            Mid-tread quantizer instance.
         """
         try:
             if d <= 0:
@@ -227,24 +232,23 @@ class StaticQuantizer():
                   *,
                   error_on_excess: bool = True) -> "StaticQuantizer":
         """
-        Creates an mid-riser uniform `StaticQuantizer` `q`.
+        Create a mid-riser uniform StaticQuantizer.
 
         Parameters
         ----------
         d : float
-            Quantization step size. Must be greater than `0`.
-        bit : None or int, optional
-            Number of bits.
-            (The default is `None`, which means infinity.)
+            Quantization step size (>0).
+        bit : int or InfInt, optional
+            Number of bits (default: infint).
         error_on_excess : bool, optional
-            Whether to raise an error when
+            If True, raise error when error exceeds delta (default: True).
+            i.e. whether to raise an error when
             `numpy.max(abs(function(u) - u)) > delta` becomes `True`.
-            (The default is `True`).
 
         Returns
         -------
-        q : StaticQuantizer
-            Mid-riser uniform `StaticQuantizer`.
+        StaticQuantizer
+            Mid-riser quantizer instance.
         """
         d = validate_float(
             d,
@@ -282,22 +286,26 @@ class StaticQuantizer():
 
 def _find_tau(A_tilde: NDArrayNum, C_1: NDArrayNum, B_2: NDArrayNum, l: int, tau_max: int) -> int:
     """
-    Finds the smallest integer tau satisfying
-    `tau >= 0 and C_1 @ mpow(A + B_2@C_2, tau) @ B_2 != 0`
+    Find the smallest integer tau such that
+    C_1 @ mpow(A_tilde, tau) @ B_2 is nonzero, tau>=0.
 
     Parameters
     ----------
-    A_tilde
-    C_1
-    B_2
+    A_tilde : NDArrayNum
+        Closed-loop system matrix.
+    C_1 : NDArrayNum
+        Output matrix.
+    B_2 : NDArrayNum
+        Input matrix.
     l : int
+        Output dimension.
     tau_max : int
-        This function looks for tau in the interval [`0`, `tau_max`].
+        Maximum tau to check.
 
     Returns
     -------
     int
-        `tau`. If `tau` doesn't exist, returns `-1`.
+        tau if found, else -1.
     """
     def is_not_zero(M: NDArrayNum) -> bool:
         return (M * 0 != M).all()
@@ -510,32 +518,33 @@ def _compose_Q_from_SVD(
 
 class DynamicQuantizer():
     """
-    Represents dynamic quantizer.
+    Dynamic quantizer.
     """
 
     def __init__(self, A: NDArrayNum, B: NDArrayNum, C: NDArrayNum, q: StaticQuantizer):
         """
-        Initializes an instance of `DynamicQuantizer`.
+        Initialize a DynamicQuantizer instance.
 
-        Parameters
-        ----------
-        A : array_like
-            Interpreted as a square matrix.
-            `N` is defined as the number of rows in matrix `A`.
-        B : array_like
-            Interpreted as a (`N` x `m`) matrix.
-            `m` is defined as the number of columns in matrix `B`.
-        C : array_like
-            Interpreted as a (`m` x `N`) matrix.
-        q : StaticQuantizer
-
-        Notes
-        -----
-        An instance of `DynamicQuantizer` represents a dynamic quantizer
-        Q given by
+        The dynamic quantizer is defined by the following equations:
 
             Q : { xi(t+1) =    A xi(t) + B u(t)
                 {   v(t)  = q( C xi(t) +   u(t) )
+
+        Parameters
+        ----------
+        A : NDArrayNum
+            State matrix (N x N).
+        B : NDArrayNum
+            Input matrix (N x m).
+        C : NDArrayNum
+            Output matrix (m x N).
+        q : StaticQuantizer
+            Static quantizer instance.
+
+        Raises
+        ------
+        ValueError
+            If matrix dimensions are inconsistent.
         """
         A_mat = matrix(A)
         B_mat = matrix(B)
@@ -576,12 +585,25 @@ class DynamicQuantizer():
                     linesep: str = "\n",
                     indent: str = "") -> str:
         """
-        Returns the formatted string of DynamicQuantizer.
+        Format a matrix as a string for display.
 
-        Arguments:
-            index (int): 0, 1 and 2 represents A, B and C, respectively.
-            sep (str, optional): Defaults to ",".
-            linesep (str, optional): Defaults to "\n,".
+        Parameters
+        ----------
+        index : int
+            0 for A, 1 for B, 2 for C.
+        formatter : Callable, optional
+            Function to format each element (default: str).
+        sep : str, optional
+            Separator for elements (default: ', ').
+        linesep : str, optional
+            Line separator (default: '\n').
+        indent : str, optional
+            Indentation for each row (default: '').
+
+        Returns
+        -------
+        str
+            Formatted matrix string.
         """
         mat = [self.A, self.B, self.C][index]
         ret = ""
@@ -642,18 +664,19 @@ class DynamicQuantizer():
 
     def gain_wv(self, steptime: int | InfInt = infint, verbose: bool = False) -> Real:
         """
-        Computes the gain u->v and w->v of this `DynamicQuantizer` in
-        `steptime`[1]_.
+        Compute the gain from w to v for this quantizer.
 
         Parameters
         ----------
-        steptime : int, None or numpy.inf, optional
-            (The default is None, which means infinity).
+        steptime : int or InfInt, optional
+            Number of steps to compute (default: infint).
+        verbose : bool, optional
+            If True, print progress (default: False).
 
         Returns
         -------
         float
-            Estimation of gain w->v .
+            Estimated gain w->v.
 
         References
         ----------
@@ -700,22 +723,23 @@ class DynamicQuantizer():
             obj_type: str = ["exp", "atan", "1.1", "100*1.1"][0],
     ) -> Real:
         """
-        Used in numerical optimization.
+        Objective function for numerical optimization.
 
         Parameters
         ----------
         system : System
-            Must be stable and SISO.
-        T : int, None or numpy.inf, optional
-            Estimation time. Must be greater than `0`.
-            (The default is `None`, which means infinity).
+            System instance (must be stable and SISO).
+        T : int or InfInt, optional
+            Estimation time (default: infint).
         gain_wv : float, optional
-            Upper limit of gain w->v . Must be greater than `0`.
-            (The default is `numpy.inf`).
+            Upper limit of gain w->v (default: inf).
+        obj_type : str, optional
+            Objective function type (default: 'exp').
 
         Returns
         -------
-        value : float
+        float
+            Objective value.
 
         References
         ----------
@@ -760,29 +784,31 @@ class DynamicQuantizer():
 
     def order_reduced(self, dim: int) -> "DynamicQuantizer":
         """
-        Returns the quantizer with its order reduced.
+        Return a reduced-order quantizer.
 
+        Parameters
+        ----------
+        dim : int
+            Desired order (1 <= dim < self.N).
+
+        Returns
+        -------
+        DynamicQuantizer
+            Reduced-order quantizer.
+
+        Raises
+        ------
+        ImportError
+            If slycot is not installed.
+
+        Notes
+        -----
         Note that the quantizer with the reduced order
         will generally have larger `E(Q)` and a larger
         `gain_wv` than those of the original quantizer. 
         You should check the performance and gain yourself.
 
         This function requires slycot. Please install it.
-
-        Parameters
-        ----------
-        dim : int
-            Order of the quantizer to be returned.
-            Must be greater than `0` and less than `self.N`.
-
-        Returns
-        -------
-        Q : DynamicQuantizer
-
-        Raises
-        ------
-        ImportError
-            if NQLib couldn't import slycot.
         """
         dim = validate_int(
             dim,
@@ -814,12 +840,12 @@ class DynamicQuantizer():
     @property
     def is_stable(self) -> bool:
         """
-        Returns stability of this quantizer[1]_.
+        Check if the quantizer is stable.
 
         Returns
         -------
         bool
-            `True` if stable, `False` if not.
+            True if stable, False otherwise.
 
         References
         ----------
@@ -840,7 +866,8 @@ class DynamicQuantizer():
 
         Returns
         -------
-        Q : DynamicQuantizer
+        DynamicQuantizer
+            Minimal realization of this quantizer.
         """
         minreal_ss: _ctrl.StateSpace = _ctrl.ss(
             self.A,
@@ -872,64 +899,44 @@ class DynamicQuantizer():
         solver: str | None = None
     ) -> Tuple["DynamicQuantizer | None", float]:
         """
-        Calculates the stable and optimal dynamic quantizer `Q` for `system`.
-        Returns `(Q, E)`. `E` is the estimation of E(Q)[1]_,[2]_,[3]_.
+        Design a stable and optimal dynamic quantizer for a system.
 
         Parameters
         ----------
         system : System
-            Must be stable.
+            Stable system instance.
         q : StaticQuantizer
-            Returned dynamic quantizer contains this static quantizer.
-            `q.delta` is important to estimate E(Q).
-        T : int, None or numpy.inf, optional
-            Estimation time. Must be greater than `0`.
-            (The default is `None`, which means infinity).
+            Static quantizer instance.
+        T : int or InfInt, optional
+            Estimation time (default: infint).
         gain_wv : float, optional
-            Upper limit of gain w->v . Must be greater than `0`.
-            (The default is `numpy.inf`).
-        dim : int, optional
-            Upper limit of order of `Q`. Must be greater than `0`.
-            (The default is `inf`).
+            Upper limit of gain w->v (default: inf).
+        dim : int or InfInt, optional
+            Upper limit of quantizer order (default: infint).
         verbose : bool, optional
-            Whether to print the details.
-            (The default is `False`).
-        solver : str, optional
-            Name of CVXPY solver. You can check the available solvers by
-            `nqlib.installed_solvers()`.
-            (The default is `None`, which implies that this function doesn't
-            specify the solver).
+            If True, print progress (default: False).
+        use_analytical_method : bool, optional
+            Use analytical method (default: True).
+        use_LP_method : bool, optional
+            Use LP method (default: True).
+        use_design_GB_method : bool, optional
+            Use gradient-based method (default: True).
+        use_DE_method : bool, optional
+            Use differential evolution method (default: False).
+        solver : str or None, optional
+            CVXPY solver name (default: None).
 
         Returns
         -------
-        (Q, E) : Tuple[DynamicQuantizer, float]
-            `Q` is the stable and optimal dynamic quantizer for `system`.
-            `E` is estimation of E(Q).
+        Q : DynamicQuantizer or None
+            Designed quantizer or None if not found.
+        E : float
+            Estimated E(Q). If Q is None, E is inf.
 
         Raises
         ------
         ValueError
-            If `system` is unstable.
-
-        References
-        ----------
-        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
-           quantizers for discrete-valued input control;IEEE Transactions
-           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
-        .. [2]  S. Azuma, Y. Minami and T. Sugie: Optimal dynamic quantizers
-           for feedback control with discrete-level actuators; Journal of 
-           Dynamic Systems, Measurement, and Control, Vol. 133, No. 2, 021005
-           (2011)
-        .. [3] 南，加嶋：システムの直列分解に基づく動的量子化器設計；計測自動制御学会
-           論文集，Vol. 52, pp. 46–51(2016)
-        .. [4] R. Morita, S. Azuma, Y. Minami and T. Sugie: Graphical design
-           software for dynamic quantizers in control systems; SICE Journal 
-           of Control, Measurement, and System Integration, Vol. 4, No. 5, 
-           pp. 372-379 (2011)
-        .. [5] Y. Minami and T. Muromaki: Differential evolution-based
-           synthesis of dynamic quantizers with fixed-structures; International
-           Journal of Computational Intelligence and Applications, Vol. 15,
-           No. 2, 1650008 (2016)
+            If system is unstable.
         """
         def _print_report(Q: "DynamicQuantizer | None", method: str):
             if verbose:
@@ -1068,61 +1075,37 @@ class DynamicQuantizer():
                   allow_unstable: bool = False,
                   verbose: bool = False) -> Tuple["DynamicQuantizer | None", float]:
         """
-        Finds the stable and optimal dynamic quantizer for `system`
-        algebraically[2]_,[3]_.
-        Returns `(Q, E)`. `E` is the estimation of E(Q)[1]_,[2]_,[3]_.
-
-        If NQLib couldn't find `Q` such that
-        ```
-        all([
-            Q.N <= dim,
-            Q.gain_wv() < gain_wv,
-            Q.is_stable,
-        ])
-        ```
-        becomes `True`, this method returns `(None, inf)`.
+        Algebraically design a stable and optimal dynamic quantizer for a system.
 
         Parameters
         ----------
         system : System
-            Must be stable and SISO.
+            Stable and SISO system instance.
         q : StaticQuantizer
-            Returned dynamic quantizer contains this static quantizer.
-            `q.delta` is important to estimate E(Q).
-        dim : int
-            Upper limit of order of `Q`. Must be greater than `0`.
-            (The default is `inf`).
+            Static quantizer instance.
+        dim : int or InfInt, optional
+            Upper limit of quantizer order (default: infint).
         gain_wv : float, optional
-            Upper limit of gain w->v . Must be greater than `0`.
-            (The default is `numpy.inf`).
-        allow_unstable: bool, optional
-            Whether to return valid `Q` even if it is unstable.
+            Upper limit of gain w->v (default: inf).
+        allow_unstable : bool, optional
+            Allow unstable quantizer (default: False).
             It's recommended to set `verbose` to `True`, so that 
             you can remember the result is unstable.
-            If this is `True`, design method in reference [3] will not be used.
+            If this is `True`, design method in reference [3] will not be used.  # TODO: これを反映させる
         verbose : bool, optional
-            Whether to print the details.
-            (The default is `False`).
+            If True, print progress (default: False).
 
         Returns
         -------
-        (Q, E) : Tuple[DynamicQuantizer, float]
-            `Q` is the stable and optimal dynamic quantizer for `system`.
-            `E` is estimation of E(Q).
+        Q : DynamicQuantizer or None
+            Designed quantizer or None if not found.
+        E : float
+            Estimated E(Q). If Q is None, E is inf.
 
         Raises
         ------
         ValueError
-            If `system` is unstable.
-
-        References
-        ----------
-        .. [2]  S. Azuma, Y. Minami and T. Sugie: Optimal dynamic quantizers
-           for feedback control with discrete-level actuators; Journal of 
-           Dynamic Systems, Measurement, and Control, Vol. 133, No. 2, 021005
-           (2011)
-        .. [3] 南，加嶋：システムの直列分解に基づく動的量子化器設計；計測自動制御学会
-           論文集，Vol. 52, pp. 46–51(2016)
+            If system is unstable.
         """
         if verbose:
             print("Trying to calculate optimal dynamic quantizer...")
@@ -1137,15 +1120,13 @@ class DynamicQuantizer():
                 q=q,
             )
         if (
+            not allow_unstable and  # If unstable Q is allowed, this method is not needed.
             (_P := system.P) is not None and
             (system.type == ConnectionType.FF and _P.tf1.issiso())
         ):
             # FF and SISO
             Q, E = _nq_serial_decomposition(system, q, verbose)
             if Q is not None:
-                if allow_unstable:
-                    # TODO: 先のは評価しなくていい？
-                    return Q, E
                 if Q.is_stable:
                     return Q, E
         if system.m >= system.l:
@@ -1206,18 +1187,7 @@ class DynamicQuantizer():
                   solver: str | None = None,
                   verbose: bool = False) -> Tuple["DynamicQuantizer | None", float]:
         """
-        Finds the stable and optimal dynamic quantizer for `system`
-        with method using linear programming method[1]_.
-        Returns `(Q, E)`. `E` is the estimation of E(Q)[1]_,[2]_,[3]_.
-
-        If NQLib couldn't find `Q` such that
-        ```
-        all([
-            Q.N <= dim,
-            Q.is_stable,
-        ])
-        ```
-        becomes `True`, this method returns `(None, inf)`.
+        Design a stable and optimal dynamic quantizer using linear programming method.
 
         Note that this method doesn't confirm that
         `Q.gain_wv() < gain_wv` becomes `True`.
@@ -1225,38 +1195,34 @@ class DynamicQuantizer():
         Parameters
         ----------
         system : System
-            Must be stable and SISO.
+            Stable and SISO system instance.
         q : StaticQuantizer
-            Returned dynamic quantizer contains this static quantizer.
-            `q.delta` is important to estimate E(Q).
-        dim : int
-            Upper limit of order of `Q`. Must be greater than `0`.
-            (The default is `inf`).
-        T : int, None or numpy.inf, optional
-            Estimation time. Must be greater than `0`.
-            (The default is `None`, which means infinity).
+            Static quantizer instance.
+        dim : int or InfInt, optional
+            Upper limit of quantizer order (default: infint).
+        T : int or InfInt, optional
+            Estimation time (default: infint) (T > 0).
         gain_wv : float, optional
-            Upper limit of gain w->v . Must be greater than `0`.
-            (The default is `numpy.inf`).
-        solver : str, optional
-            Name of CVXPY solver. You can check the available solvers by
+            Upper limit of gain w->v (default: inf) (gain_wv > 0).
+        solver : str or None, optional
+            CVXPY solver name (default: None). You can check the available solvers by
             `nqlib.installed_solvers()`.
-            (The default is `None`, which implies that this function doesn't
+            (If `None`, this function doesn't
             specify the solver).
         verbose : bool, optional
-            Whether to print the details.
-            (The default is `False`).
+            If True, print progress (default: False).
 
         Returns
         -------
-        (Q, E) : Tuple[DynamicQuantizer, float]
-            `Q` is the stable and optimal dynamic quantizer for `system`.
-            `E` is estimation of E(Q).
+        Q : DynamicQuantizer or None
+            Designed quantizer or None if not found.
+        E : float
+            Estimated E(Q). If Q is None, E is inf.
 
         Raises
         ------
         ValueError
-            If `system` is unstable.
+            If system is unstable.
 
         References
         ----------
@@ -1480,53 +1446,40 @@ class DynamicQuantizer():
         obj_type: str = ["exp", "atan", "1.1", "100*1.1"][0],
     ) -> Tuple["DynamicQuantizer | None", float]:
         """
-        Finds the stable and optimal dynamic quantizer `Q` for `system`.
-        Returns `(Q, E)`. `E` is the estimation of E(Q)[1]_,[2]_,[3]_.
-
-        If NQLib couldn't find `Q` such that
-        ```
-        all([
-            Q.N == dim,
-            Q.gain_wv() < gain_wv,
-            Q.is_stable,
-        ])
-        ```
-        becomes `True`, this method returns `(None, inf)`.
+        Design a stable and optimal dynamic quantizer using gradient-based optimization.
 
         Parameters
         ----------
         system : System
-            Must be stable and SISO.
+            Stable and SISO system instance.
         q : StaticQuantizer
-            Returned dynamic quantizer contains this static quantizer.
-            `q.delta` is important to estimate E(Q).
+            Static quantizer instance.
         dim : int
-            Upper limit of order of `Q`. Must be greater than `0`.
-        T : int, None or numpy.inf, optional
-            Estimation time. Must be greater than `0`.
-            (The default is `None`, which means infinity).
+            Quantizer order.
+        T : int or InfInt, optional
+            Estimation time (default: infint).
         gain_wv : float, optional
-            Upper limit of gain w->v . Must be greater than `0`.
-            (The default is `numpy.inf`).
+            Upper limit of gain w->v (default: inf).
         verbose : bool, optional
-            Whether to print the details.
-            (The default is `False`).
+            If True, print progress (default: False).
         method : str, optional
-            Specifies which method should be used in
-            `scipy.optimize.minimize()`.
-            (The default is `None`, which implies that this function doesn't
-            specify the method).
+            Optimization method for scipy.optimize.minimize (default: 'SLSQP').
+            (If `None`, this function doesn't specify the method).
+        obj_type : str, optional
+            Objective function type (default: 'exp').
 
         Returns
         -------
-        (Q, E) : Tuple[DynamicQuantizer, float]
-            `Q` is the stable and optimal dynamic quantizer for `system`.
-            `E` is estimation of E(Q).
+        Q : DynamicQuantizer or None
+            Designed quantizer or None if not found.
+
+        E : float
+            Estimated E(Q). If Q is None, E is inf.
 
         Raises
         ------
         ValueError
-            If `system` is unstable.
+            If system is unstable.
 
         References
         ----------
@@ -1534,7 +1487,7 @@ class DynamicQuantizer():
            synthesis of dynamic quantizers with fixed-structures; International
            Journal of Computational Intelligence and Applications, Vol. 15,
            No. 2, 1650008 (2016)
-        """  # TODO: ドキュメント更新
+        """
         T = validate_int_or_inf(
             T,
             minimum=1,  # T must be greater than 0
@@ -1633,38 +1586,34 @@ class DynamicQuantizer():
         verbose: bool = False,
     ) -> Tuple["DynamicQuantizer | None", float]:  # TODO: method のデフォルトを決める
         """
-        Calculates the stable and optimal dynamic quantizer `Q` for `system`.
-        Returns `(Q, E)`. `E` is the estimation of E(Q)[1]_,[2]_,[3]_.
+        Design a stable and optimal dynamic quantizer using differential evolution.
 
         Parameters
         ----------
         system : System
-            Must be stable and SISO.
+            Stable and SISO system instance.
         q : StaticQuantizer
-            Returned dynamic quantizer contains this static quantizer.
-            `q.delta` is important to estimate E(Q).
+            Static quantizer instance.
         dim : int
-            Order of `Q`. Must be greater than `0`.
-        T : int, None or numpy.inf, optional
-            Estimation time. Must be greater than `0`.
-            (The default is `None`, which means infinity).
+            Order of the quantizer.
+        T : int or InfInt, optional
+            Estimation time (default: infint).
         gain_wv : float, optional
-            Upper limit of gain w->v . Must be greater than `0`.
-            (The default is `numpy.inf`).
+            Upper limit of gain w->v (default: inf).
         verbose : bool, optional
-            Whether to print the details.
-            (The default is `False`).
+            If True, print progress (default: False).
 
         Returns
         -------
-        (Q, E) : Tuple[DynamicQuantizer, float]
-            `Q` is the stable and optimal dynamic quantizer for `system`.
-            `E` is estimation of E(Q).
+        Q : DynamicQuantizer or None
+            Designed quantizer or None if not found.
+        E : float
+            Estimated E(Q). If Q is None, E is inf.
 
         Raises
         ------
         ValueError
-            If `system` is unstable.
+            If system is unstable.
 
         References
         ----------
@@ -1762,25 +1711,16 @@ class DynamicQuantizer():
 
     def quantize(self, u: NDArrayNum) -> NDArrayNum:
         """
-        Quantizes the input signal `u`.
-        Returns v in the following figure.
-
-        ```text
-               +-----+       
-         u --->|  Q  |---> v 
-               +-----+       
-        ```
-
-        "Q" in this figure means this quantizer.
+        Quantize the input signal using this dynamic quantizer.
 
         Parameters
         ----------
-        u : array_like
+        u : NDArrayNum
             Input signal.
 
         Returns
         -------
-        v : np.ndarray
+        NDArrayNum
             Quantized signal.
         """
         u = matrix(u)
@@ -1800,25 +1740,22 @@ class DynamicQuantizer():
              steptime: int | InfInt = infint,
              _check_stability: bool = True) -> float:
         """
-        Returns estimation of E(Q), where Q is this dynamic quantizer.
+        Compute the cost (E(Q)) for the quantizer and system.
 
         Parameters
         ----------
         system : System
-            The system to insert this dynamic quantizer.
-        steptime : int or None, optional
-            Evaluation time. Must be a natural number.
-            (The default is `None`, which implies that this function
+            System instance.
+        steptime : int or InfInt, optional
+            Number of steps (default: infint, which implies that this function
             calculates until convergence.)
         _check_stability : bool, optional
-            This shouldn't be changed.
-            `(steptime is not None or _check_stability)` must be `True`.
-            (The default is `True`.)
+            If True, check stability (default: True).
 
         Returns
         -------
         float
-            Estimation of E(Q) in `steptime`.
+            Estimation of E(Q) in given steptime.
 
         References
         ----------
@@ -1832,21 +1769,20 @@ class DynamicQuantizer():
              steptime: int | InfInt = infint,
              show: bool = True) -> str:
         """
-        Prints the specs of this DynamicQuantizer.
+        Return a string summary of the quantizer's specification.
 
         Parameters
         ----------
-        steptime : int or None, optional
-            Evaluation time to compute the gain. Must be a natural number.
-            (The default is `None`, which implies that this function
-            calculates until convergence.)
-        print : bool, optional
-            Whether to print or only return the string.
+        steptime : int or InfInt, optional
+            Number of steps (default: infint, which implies that this function
+            calculates until convergence).
+        show : bool, optional
+            If True, print the summary (default: True).
 
         Returns
         -------
         str
-            Printed string.
+            Specification summary.
         """
         s = (
             "The specs of \n"
@@ -1874,19 +1810,14 @@ def order_reduced(Q: DynamicQuantizer, dim: int) -> DynamicQuantizer:
     Parameters
     ----------
     Q : DynamicQuantizer
-        The quantizer you want to reduce the order of.
+        Quantizer to reduce.
     dim : int
-        Order of the quantizer to be returned.
-        Must be greater than `0` and less than `self.N`.
+        Desired order (1 <= dim < Q.N).
 
     Returns
     -------
-    Q : DynamicQuantizer
-
-    Raises
-    ------
-    ImportError
-        if NQLib couldn't import slycot.
+    DynamicQuantizer
+        Quantizer with reduced order.
     """
     # check Q
     if type(Q) is not DynamicQuantizer:

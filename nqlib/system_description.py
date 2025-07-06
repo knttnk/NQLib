@@ -9,8 +9,17 @@ from .linalg import block, eye, matrix, norm, zeros, eig_max
 from .quantizer import DynamicQuantizer as _DynamicQuantizer
 from .quantizer import StaticQuantizer as _StaticQuantizer
 from .quantizer import _ConnectionType
+from packaging.version import Version
 
-_ctrl.use_numpy_matrix(False)
+if Version(_ctrl.__version__) >= Version("0.9.2"):
+    # ctrl_poles = _ctrl.poles
+    # ctrl_zeros = _ctrl.zeros
+    pass
+else:
+    # ctrl_poles = _ctrl.pole
+    # ctrl_zeros = _ctrl.zero
+    _ctrl.use_numpy_matrix(False)
+
 __all__ = [
     'System',
     'Controller',

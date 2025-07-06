@@ -27,8 +27,10 @@ jobs:
         python-version: ${{ matrix.python-version }}
     - name: Install deps
       run: |
-        conda install -c conda-forge control slycot cvxpy
-        conda install numpy scipy 
+        conda activate nqlib-test
+        conda install -c conda-forge control slycot cvxpy -y
+        conda install numpy scipy -y
     - name: Test with unittest
       run: |
+        conda activate nqlib-test
         python -m unittest discover tests

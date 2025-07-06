@@ -1,4 +1,3 @@
-
 from enum import Enum as _Enum
 from typing import Any
 
@@ -19,18 +18,73 @@ class InfInt(_Enum):
     Value = np.inf
 
     def __lt__(self, other: Any) -> bool:
+        """
+        Compare if InfInt is less than another value.
+
+        Parameters
+        ----------
+        other : Any
+            Value to compare.
+
+        Returns
+        -------
+        bool
+        """
         return np.inf < other
 
     def __le__(self, other: Any) -> bool:
+        """
+        Compare if InfInt is less than or equal to another value.
+
+        Parameters
+        ----------
+        other : Any
+            Value to compare.
+
+        Returns
+        -------
+        bool
+        """
         return np.inf <= other
 
     def __gt__(self, other: Any) -> bool:
+        """
+        Compare if InfInt is greater than another value.
+
+        Parameters
+        ----------
+        other : Any
+            Value to compare.
+
+        Returns
+        -------
+        bool
+        """
         return np.inf > other
 
     def __ge__(self, other: Any) -> bool:
+        """
+        Compare if InfInt is greater than or equal to another value.
+
+        Parameters
+        ----------
+        other : Any
+            Value to compare.
+
+        Returns
+        -------
+        bool
+        """
         return np.inf >= other
 
     def __float__(self) -> float:
+        """
+        Convert InfInt to float.
+
+        Returns
+        -------
+        float
+        """
         return float(np.inf)
 
 
@@ -46,8 +100,23 @@ def validate_int_or_inf(
     """
     Validates if the given value is an integer or InfInt.
 
-    After validation, `minimum` <= `val` is satisfied.
-    InfInt is allowed.
+    Parameters
+    ----------
+    val : Any
+        Value to validate.
+    minimum : int or None, optional
+        Minimum allowed value (inclusive). Default is None.
+    name : str, optional
+        Name of the variable for error messages. Default is ''.
+
+    Returns
+    -------
+    int or InfInt
+        Validated integer or InfInt value.
+
+    Notes
+    -----
+    After validation, `minimum` <= `val` is satisfied. InfInt is allowed.
     """
     # check type
     if isinstance(val, InfInt):
@@ -65,6 +134,24 @@ def validate_int(
     """
     Validates if the given value is an integer or InfInt.
 
+    Parameters
+    ----------
+    val : Any
+        Value to validate.
+    minimum : int or None, optional
+        Minimum allowed value (inclusive). Default is None.
+    maximum : int or None, optional
+        Maximum allowed value (inclusive). Default is None.
+    name : str, optional
+        Name of the variable for error messages. Default is ''.
+
+    Returns
+    -------
+    int
+        Validated integer value.
+
+    Notes
+    -----
     After validation, `minimum` <= `val` <= `maximum` is satisfied.
     """
     if not float(val).is_integer():
@@ -96,6 +183,35 @@ def validate_float(
     """
     Validates if the given value is a float.
 
+    Parameters
+    ----------
+    val : Any
+        Value to validate.
+    minimum : float or None, optional
+        Minimum allowed value (inclusive). Default is None.
+    maximum : float or None, optional
+        Maximum allowed value (inclusive). Default is None.
+    infimum : float or None, optional
+        Lower bound (exclusive). Default is None.
+    supremum : float or None, optional
+        Upper bound (exclusive). Default is None.
+    name : str, optional
+        Name of the variable for error messages. Default is ''.
+
+    Returns
+    -------
+    float
+        Validated float value.
+
+    Raises
+    ------
+    TypeError
+        If the value is not a float.
+    ValueError
+        If the value is out of the specified range.
+
+    Notes
+    -----
     After validation,
     `minimum` <= `val`,
     `infimum` < `val`,

@@ -1536,7 +1536,7 @@ class DynamicQuantizer():
             print(f"The optimization method is '{method}'.")
             print("### Message from `scipy.optimize.minimize()`. ###")
         result = _minimize(obj,
-                           x0=zeros(2 * dim)[0],
+                           x0=_np.random.randn(2 * dim) * 0.001,
                            tol=0,
                            options={
                                "disp": verbose,

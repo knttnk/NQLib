@@ -25,9 +25,9 @@ else:
     _ctrl.use_numpy_matrix(False)  # type: ignore
 
 __all__ = [
-    'System',
     'Controller',
     'Plant',
+    'System',
 ]
 # TODO: support control.input_output_response()
 # TODO: define function returns control.InputOutputSystem

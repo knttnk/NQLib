@@ -7,6 +7,8 @@ from numpy.typing import NDArray
 Real = np.floating | np.integer
 NDArrayNum = NDArray[Real]
 
+__all__ = ["infint"]
+
 
 class InfInt(_Enum):
     """
@@ -24,10 +26,10 @@ class InfInt(_Enum):
 
     def __gt__(self, other: Any) -> bool:
         return np.inf > other
-    
+
     def __ge__(self, other: Any) -> bool:
         return np.inf >= other
-    
+
     def __float__(self) -> float:
         return float(np.inf)
 

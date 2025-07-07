@@ -68,25 +68,24 @@ class StaticQuantizer():
                  *,
                  error_on_excess: bool = True):
         """
-        Initialize a StaticQuantizer instance.
+        Initialize a StaticQuantizer `q`.
 
         Parameters
         ----------
         function : Callable[[NDArrayNum], NDArrayNum]
-            Quantization function.
+            Quantization function. Must be callable.
         delta : float
-            Maximum allowed quantization error.
+            The maximum allowed quantization error. Declares that for any real vector `u`, max(|q(u)-u|) <= `delta`. `delta` > 0.
         error_on_excess : bool, optional
-            If True, raise error when error exceeds delta (default: True).
-            i.e. whether to raise an error when
-            `numpy.max(abs(function(u) - u)) > delta` becomes `True`.
+            If True, raise error when error exceeds `delta` (default: True).
+            i.e. whether to raise an error when max(|q(u)-u|) > `delta` becomes True.
 
         Raises
         ------
         TypeError
-            If function is not callable.
+            If `function` is not callable.
         ValueError
-            If quantization error exceeds delta and error_on_excess is True.
+            If quantization error exceeds `delta` and `error_on_excess` is True.
         """
         self.delta = validate_float(
             delta,
@@ -175,18 +174,18 @@ class StaticQuantizer():
         Parameters
         ----------
         d : float
-            Quantization step size (>0).
+            Quantization step size. For a real vector u, max(|q(u)-u|) <= d/2. `delta` > 0.
         bit : int or InfInt, optional
-            Number of bits (default: infint).
+            Number of bits. Must satisfy `bit` >= 1 (default: `infint`).
+            That is, the returned function can take `2**n` values.
         error_on_excess : bool, optional
-            If True, raise error when error exceeds delta (default: True).
-            i.e. whether to raise an error when
-            `numpy.max(abs(function(u) - u)) > delta` becomes `True`.
-            (The default is `True`).
+            If True, raise error when error exceeds `delta` (=d/2) (default: True).
+            i.e. whether to raise an error when max(|q(u)-u|) > `delta` becomes `True`.
+            Basically, this error should not occur, but for numerical safety, set this to True.
 
         Returns
         -------
-        StaticQuantizer
+        q : StaticQuantizer
             Mid-tread quantizer instance.
         """
         try:
@@ -237,13 +236,14 @@ class StaticQuantizer():
         Parameters
         ----------
         d : float
-            Quantization step size (>0).
+            Quantization step size. For a real vector u, max(|q(u)-u|) <= d/2. `delta` > 0.
         bit : int or InfInt, optional
-            Number of bits (default: infint).
+            Number of bits. Must satisfy `bit` >= 1 (default: `infint`).
+            That is, the returned function can take `2**n` values.
         error_on_excess : bool, optional
-            If True, raise error when error exceeds delta (default: True).
-            i.e. whether to raise an error when
-            `numpy.max(abs(function(u) - u)) > delta` becomes `True`.
+            If True, raise error when error exceeds `delta` (=d/2) (default: True).
+            i.e. whether to raise an error when max(|q(u)-u|) > `delta` becomes `True`.
+            Basically, this error should not occur, but for numerical safety, set this to True.
 
         Returns
         -------
@@ -519,6 +519,17 @@ def _compose_Q_from_SVD(
 class DynamicQuantizer():
     """
     Dynamic quantizer.
+
+    Parameters
+    ----------
+    A : NDArrayNum
+        State matrix (N x N, real or complex). N >= 1.
+    B : NDArrayNum
+        Input matrix (N x m, real or complex). m >= 1.
+    C : NDArrayNum
+        Output matrix (m x N, real or complex).
+    q : StaticQuantizer
+        Static quantizer instance.
     """
 
     def __init__(self, A: NDArrayNum, B: NDArrayNum, C: NDArrayNum, q: StaticQuantizer):
@@ -533,11 +544,11 @@ class DynamicQuantizer():
         Parameters
         ----------
         A : NDArrayNum
-            State matrix (N x N).
+            State matrix (N x N, real). N >= 1.
         B : NDArrayNum
-            Input matrix (N x m).
+            Input matrix (N x m, real). m >= 1.
         C : NDArrayNum
-            Output matrix (m x N).
+            Output matrix (m x N, real).
         q : StaticQuantizer
             Static quantizer instance.
 
@@ -598,7 +609,7 @@ class DynamicQuantizer():
         linesep : str, optional
             Line separator (default: '\n').
         indent : str, optional
-            Indentation for each row (default: '').
+            String to prepend to each row (default: '').
 
         Returns
         -------
@@ -669,9 +680,11 @@ class DynamicQuantizer():
         Parameters
         ----------
         steptime : int or InfInt, optional
-            Number of steps to compute (default: infint).
+            The number of time steps to use for the gain calculation.
+            If `infint`, calculation continues until convergence.
+            `steptime` >= 1 (default: `infint`, which means until convergence).
         verbose : bool, optional
-            If True, print progress (default: False).
+            If True, print progress information during calculation (default: False).
 
         Returns
         -------
@@ -728,13 +741,14 @@ class DynamicQuantizer():
         Parameters
         ----------
         system : System
-            System instance (must be stable and SISO).
+            The system for which the quantizer is being optimized. Must be stable and SISO.
         T : int or InfInt, optional
-            Estimation time (default: infint).
+            The number of time steps for estimation.
+            `T` >= 1 (default: `infint`, which means until convergence).
         gain_wv : float, optional
-            Upper limit of gain w->v (default: inf).
+            Upper limit for the w->v gain. `gain_wv` >= 0 (default: np.inf).
         obj_type : str, optional
-            Objective function type (default: 'exp').
+            Objective function type. Must be one of ['exp', 'atan', '1.1', '100*1.1'] (default: 'exp').
 
         Returns
         -------
@@ -800,6 +814,8 @@ class DynamicQuantizer():
         ------
         ImportError
             If slycot is not installed.
+        ValueError
+            If `dim` is not in the valid range.
 
         Notes
         -----
@@ -908,11 +924,11 @@ class DynamicQuantizer():
         q : StaticQuantizer
             Static quantizer instance.
         T : int or InfInt, optional
-            Estimation time (default: infint).
+            Estimation time (default: infint). `T` >= 1.
         gain_wv : float, optional
-            Upper limit of gain w->v (default: inf).
+            Upper limit of gain w->v (default: inf). `gain_wv` >= 0.
         dim : int or InfInt, optional
-            Upper limit of quantizer order (default: infint).
+            Upper limit of quantizer order (default: infint). `dim` >= 1.
         verbose : bool, optional
             If True, print progress (default: False).
         use_analytical_method : bool, optional
@@ -1084,9 +1100,9 @@ class DynamicQuantizer():
         q : StaticQuantizer
             Static quantizer instance.
         dim : int or InfInt, optional
-            Upper limit of quantizer order (default: infint).
+            Upper limit of quantizer order (default: infint). `dim` >= 1.
         gain_wv : float, optional
-            Upper limit of gain w->v (default: inf).
+            Upper limit of gain w->v (default: inf). `gain_wv` >= 0.
         allow_unstable : bool, optional
             Allow unstable quantizer (default: False).
             It's recommended to set `verbose` to `True`, so that 
@@ -1199,11 +1215,11 @@ class DynamicQuantizer():
         q : StaticQuantizer
             Static quantizer instance.
         dim : int or InfInt, optional
-            Upper limit of quantizer order (default: infint).
+            Upper limit of quantizer order (default: infint). `dim` >= 1.
         T : int or InfInt, optional
-            Estimation time (default: infint) (T > 0).
+            Estimation time (default: infint) (`T` > 0).
         gain_wv : float, optional
-            Upper limit of gain w->v (default: inf) (gain_wv > 0).
+            Upper limit of gain w->v (default: inf) (`gain_wv` > 0).
         solver : str or None, optional
             CVXPY solver name (default: None). You can check the available solvers by
             `nqlib.installed_solvers()`.
@@ -1217,7 +1233,7 @@ class DynamicQuantizer():
         Q : DynamicQuantizer or None
             Designed quantizer or None if not found.
         E : float
-            Estimated E(Q). If Q is None, E is inf.
+            Estimated E(Q). If `Q` is None, `E` is inf.
 
         Raises
         ------
@@ -1455,11 +1471,11 @@ class DynamicQuantizer():
         q : StaticQuantizer
             Static quantizer instance.
         dim : int
-            Quantizer order.
+            Quantizer order. `dim` >= 1.
         T : int or InfInt, optional
-            Estimation time (default: infint).
+            Estimation time (default: infint). `T` >= 1.
         gain_wv : float, optional
-            Upper limit of gain w->v (default: inf).
+            Upper limit of gain w->v (default: inf). `gain_wv` >= 0.
         verbose : bool, optional
             If True, print progress (default: False).
         method : str, optional
@@ -1595,11 +1611,11 @@ class DynamicQuantizer():
         q : StaticQuantizer
             Static quantizer instance.
         dim : int
-            Order of the quantizer.
+            Order of the quantizer. `dim` >= 1.
         T : int or InfInt, optional
-            Estimation time (default: infint).
+            Estimation time (default: infint). `T` >= 1.
         gain_wv : float, optional
-            Upper limit of gain w->v (default: inf).
+            Upper limit of gain w->v (default: inf). `gain_wv` >= 0.
         verbose : bool, optional
             If True, print progress (default: False).
 
@@ -1716,17 +1732,17 @@ class DynamicQuantizer():
         Parameters
         ----------
         u : NDArrayNum
-            Input signal.
+            Input signal. Shape: (m, length).
 
         Returns
         -------
         NDArrayNum
-            Quantized signal.
+            Quantized signal. Shape: (1, length).
         """
         u = matrix(u)
         length = u.shape[1]
 
-        v = zeros((1, length))
+        v = zeros((1, length))  # TODO: vと同じ次数になるはずでは？
         xi = zeros((len(self.A), length))
 
         for i in range(length):
@@ -1748,7 +1764,7 @@ class DynamicQuantizer():
             System instance.
         steptime : int or InfInt, optional
             Number of steps (default: infint, which implies that this function
-            calculates until convergence.)
+            calculates until convergence). `steptime` >= 1.
         _check_stability : bool, optional
             If True, check stability (default: True).
 
@@ -1775,7 +1791,7 @@ class DynamicQuantizer():
         ----------
         steptime : int or InfInt, optional
             Number of steps (default: infint, which implies that this function
-            calculates until convergence).
+            calculates until convergence). `steptime` >= 1.
         show : bool, optional
             If True, print the summary (default: True).
 
@@ -1810,9 +1826,9 @@ def order_reduced(Q: DynamicQuantizer, dim: int) -> DynamicQuantizer:
     Parameters
     ----------
     Q : DynamicQuantizer
-        Quantizer to reduce.
+        The quantizer to be reduced. Must be an instance of `DynamicQuantizer`.
     dim : int
-        Desired order (1 <= dim < Q.N).
+        Desired order (1 <= `dim` < `Q.N`).
 
     Returns
     -------

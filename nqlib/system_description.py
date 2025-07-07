@@ -55,6 +55,14 @@ class Controller(object):
         synthesis of dynamic quantizers with fixed-structures; International
         Journal of Computational Intelligence and Applications, Vol. 15,
         No. 2, 1650008 (2016)
+
+    Example
+    -------
+    >>> import nqlib
+    >>> import numpy as np
+    >>> K = nqlib.Controller(np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1))
+    >>> K.A
+    array([[1.]])
     """
 
     def __init__(self, A: ArrayLike, B1: ArrayLike, B2: ArrayLike, C: ArrayLike, D1: ArrayLike, D2: ArrayLike):
@@ -82,6 +90,14 @@ class Controller(object):
             If any argument cannot be interpreted as a matrix.
         ValueError
             If matrix dimensions are inconsistent.
+
+        Example
+        -------
+        >>> import nqlib
+        >>> import numpy as np
+        >>> K = nqlib.Controller(np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1))
+        >>> K.B1
+        array([[1.]])
         """
         try:
             A_mat = matrix(A)
@@ -168,6 +184,14 @@ class Plant(object):
         P : { x(t+1) =  A x(t) + B u(t)
             {  z(t)  = C1 x(t)
             {  y(t)  = C2 x(t)
+
+    Example
+    -------
+    >>> import nqlib
+    >>> import numpy as np
+    >>> P = nqlib.Plant(np.eye(1), np.eye(1), np.eye(1), np.eye(1))
+    >>> P.A
+    array([[1.]])
     """
 
     def __init__(self, A: ArrayLike, B: ArrayLike, C1: ArrayLike, C2: ArrayLike):
@@ -198,6 +222,14 @@ class Plant(object):
            synthesis of dynamic quantizers with fixed-structures; International
            Journal of Computational Intelligence and Applications, Vol. 15,
            No. 2, 1650008 (2016)
+
+        Example
+        -------
+        >>> import nqlib
+        >>> import numpy as np
+        >>> P = nqlib.Plant(np.eye(1), np.eye(1), np.eye(1), np.eye(1))
+        >>> P.B
+        array([[1.]])
         """
         try:
             A_mat = matrix(A)
@@ -261,6 +293,15 @@ class Plant(object):
         -------
         Plant
             Plant instance with `C2` set to zero.
+
+        Example
+        -------
+        >>> import nqlib
+        >>> import control
+        >>> tf = control.TransferFunction([1], [1, -0.5], 1)
+        >>> P = nqlib.Plant.from_TF(tf)
+        >>> P.A.shape[0]
+        2
         """
         ss: _ctrl.StateSpace = _ctrl.tf2ss(tf)  # type: ignore
         _C = matrix(ss.C)
@@ -295,6 +336,14 @@ class System():
         G : { x(t+1) =  A x(t) + B1 r(t) + B2 v(t)
             {  z(t)  = C1 x(t) + D1 r(t)
             {  u(t)  = C2 x(t) + D2 r(t)
+
+    Example
+    -------
+    >>> import nqlib
+    >>> import numpy as np
+    >>> sys = nqlib.System(np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1))
+    >>> sys.A
+    array([[1.]])
     """
 
     def __str__(self) -> str:
@@ -376,6 +425,16 @@ class System():
         .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
            quantizers for discrete-valued input control;IEEE Transactions
            on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
+
+        Example
+        -------
+        >>> import nqlib
+        >>> import numpy as np
+        >>> sys = nqlib.System(np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1))
+        >>> q = nqlib.StaticQuantizer.mid_tread(0.1)
+        >>> t, u, v, z = sys.response_with_quantizer(q, np.ones((1, 5)), np.zeros((1, 1)))
+        >>> t.shape
+        (1, 5)
         """
         _quantizer: DynamicQuantizer = DynamicQuantizer(
             zeros((1, 1)), zeros((1, self.m)),
@@ -433,6 +492,15 @@ class System():
         .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
            quantizers for discrete-valued input control;IEEE Transactions
            on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
+
+        Example
+        -------
+        >>> import nqlib
+        >>> import numpy as np
+        >>> sys = nqlib.System(np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1))
+        >>> t, u, z = sys.response(np.ones((1, 5)), np.zeros((1, 1)))
+        >>> t.shape
+        (1, 5)
         """
         # TODO: support xP_0, xK_0
         # TODO: support time
@@ -487,6 +555,14 @@ class System():
         .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
            quantizers for discrete-valued input control;IEEE Transactions
            on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
+
+        Example
+        -------
+        >>> import nqlib
+        >>> import numpy as np
+        >>> sys = nqlib.System(np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1))
+        >>> sys.B1
+        array([[1.]])
         """
         try:
             A_mat = matrix(A)
@@ -592,6 +668,15 @@ class System():
         .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
            quantizers for discrete-valued input control;IEEE Transactions
            on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
+
+        Example
+        -------
+        >>> import nqlib
+        >>> import numpy as np
+        >>> P = nqlib.Plant(np.eye(1), np.eye(1), np.eye(1), np.eye(1))
+        >>> sys = nqlib.System.from_FF(P)
+        >>> sys.type == nqlib.ConnectionType.FF
+        True
         """
         n = P.A.shape[0]
         m = P.B.shape[1]
@@ -647,6 +732,16 @@ class System():
         .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
            quantizers for discrete-valued input control;IEEE Transactions
            on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
+
+        Example
+        -------
+        >>> import nqlib
+        >>> import numpy as np
+        >>> P = nqlib.Plant(np.eye(1), np.eye(1), np.eye(1), np.eye(1))
+        >>> K = nqlib.Controller(np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1))
+        >>> sys = nqlib.System.from_FB_connection_with_input_quantizer(P, K)
+        >>> sys.type == nqlib.ConnectionType.FB_WITH_INPUT_QUANTIZER
+        True
         """
         if P.l2 != K.p:
             raise ValueError(
@@ -719,6 +814,16 @@ class System():
         .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
            quantizers for discrete-valued input control;IEEE Transactions
            on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
+
+        Example
+        -------
+        >>> import nqlib
+        >>> import numpy as np
+        >>> P = nqlib.Plant(np.eye(1), np.eye(1), np.eye(1), np.eye(1))
+        >>> K = nqlib.Controller(np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1))
+        >>> sys = nqlib.System.from_FB_connection_with_output_quantizer(P, K)
+        >>> sys.type == nqlib.ConnectionType.FB_WITH_OUTPUT_QUANTIZER
+        True
         """
         if P.m != K.m:
             raise ValueError(
@@ -780,6 +885,16 @@ class System():
         -------
         System
             System with quantizer inserted at controller input (feedback).
+
+        Example
+        -------
+        >>> import nqlib
+        >>> import numpy as np
+        >>> P = nqlib.Plant(np.eye(1), np.eye(1), np.eye(1), np.eye(1))
+        >>> K = nqlib.Controller(np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1))
+        >>> sys = nqlib.System.from_FBIQ(P, K)
+        >>> sys.type == nqlib.ConnectionType.FB_WITH_INPUT_QUANTIZER
+        True
         """
         return System.from_FB_connection_with_input_quantizer(P, K)
 
@@ -802,6 +917,16 @@ class System():
         -------
         System
             System with quantizer inserted at controller output (feedback).
+
+        Example
+        -------
+        >>> import nqlib
+        >>> import numpy as np
+        >>> P = nqlib.Plant(np.eye(1), np.eye(1), np.eye(1), np.eye(1))
+        >>> K = nqlib.Controller(np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1))
+        >>> sys = nqlib.System.from_FBOQ(P, K)
+        >>> sys.type == nqlib.ConnectionType.FB_WITH_OUTPUT_QUANTIZER
+        True
         """
         return System.from_FB_connection_with_output_quantizer(P, K)
 
@@ -814,6 +939,14 @@ class System():
         -------
         bool
             True if stable, False otherwise.
+
+        Example
+        -------
+        >>> import nqlib
+        >>> import numpy as np
+        >>> sys = nqlib.System(np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1))
+        >>> sys.is_stable
+        True
         """
         A_tilde = self.A + self.B2 @ self.C2  # convert to closed loop
         if eig_max(A_tilde) > 1:
@@ -851,6 +984,11 @@ class System():
         .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
            quantizers for discrete-valued input control;IEEE Transactions
            on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
+
+        Example
+        -------
+        >>> import nqlib
+        >>> raise NotImplementedError()
         """
         steptime = validate_int_or_inf(
             steptime,
@@ -939,6 +1077,15 @@ class System():
         .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
            quantizers for discrete-valued input control;IEEE Transactions
            on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
+
+        Example
+        -------
+        >>> import nqlib
+        >>> import numpy as np
+        >>> sys = nqlib.System(np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1))
+        >>> q = nqlib.StaticQuantizer.mid_tread(0.1)
+        >>> sys.is_stable_with_quantizer(q)
+        True
         """
         if isinstance(Q, StaticQuantizer):
             return self.is_stable
@@ -963,5 +1110,14 @@ class System():
         .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
            quantizers for discrete-valued input control;IEEE Transactions
            on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
+
+        Example
+        -------
+        >>> import nqlib
+        >>> import numpy as np
+        >>> sys = nqlib.System(np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1))
+        >>> q = nqlib.StaticQuantizer.mid_tread(0.1)
+        >>> sys.is_stable_with(q)
+        True
         """
         return self.is_stable_with_quantizer(Q)

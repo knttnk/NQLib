@@ -746,7 +746,7 @@ class DynamicQuantizer():
             The number of time steps for estimation.
             `T` >= 1 (default: `infint`, which means until convergence).
         gain_wv : float, optional
-            Upper limit for the w->v gain. `gain_wv` >= 0 (default: np.inf).
+            Upper limit for the w->v gain. `gain_wv` >= 0 (default: `np.inf`).
         obj_type : str, optional
             Objective function type. Must be one of ['exp', 'atan', '1.1', '100*1.1'] (default: 'exp').
 
@@ -803,7 +803,7 @@ class DynamicQuantizer():
         Parameters
         ----------
         dim : int
-            Desired order (1 <= dim < self.N).
+            Desired order (1 <= `dim` < `self.N`).
 
         Returns
         -------

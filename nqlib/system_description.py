@@ -64,17 +64,17 @@ class Controller(object):
         Parameters
         ----------
         A : array_like
-            State matrix (n x n).
+            State matrix (`n` x `n`), real.
         B1 : array_like
-            Input matrix for r (n x l).
+            Input matrix for r (`n` x `l`), real.
         B2 : array_like
-            Input matrix for y (n x p).
+            Input matrix for y (`n` x `p`), real.
         C : array_like
-            Output matrix (m x n).
+            Output matrix (`m` x `n`), real.
         D1 : array_like
-            Feedthrough matrix for r (m x l).
+            Feedthrough matrix for r (`m` x `l`), real.
         D2 : array_like
-            Feedthrough matrix for y (m x p).
+            Feedthrough matrix for y (`m` x `p`), real.
 
         Raises
         ------
@@ -177,13 +177,13 @@ class Plant(object):
         Parameters
         ----------
         A : array_like
-            State matrix (n x n).
+            State matrix (`n` x `n`), real.
         B : array_like
-            Input matrix (n x m).
+            Input matrix (`n` x `m`), real.
         C1 : array_like
-            Output matrix for z (l1 x n).
+            Output matrix for z (`l1` x `n`), real.
         C2 : array_like
-            Output matrix for y (l2 x n).
+            Output matrix for y (`l2` x `n`), real.
 
         Raises
         ------
@@ -255,12 +255,12 @@ class Plant(object):
         Parameters
         ----------
         tf : control.TransferFunction
-            Transfer function from input u to output z.
+            Transfer function from input `u` to output `z`.
 
         Returns
         -------
         Plant
-            Plant instance with C2 set to zero.
+            Plant instance with `C2` set to zero.
         """
         ss: _ctrl.StateSpace = _ctrl.tf2ss(tf)  # type: ignore
         _C = matrix(ss.C)
@@ -356,20 +356,20 @@ class System():
         quantizer : DynamicQuantizer or StaticQuantizer
             Quantizer to use in the simulation.
         input : array_like
-            Input signal (reference r).
+            Input signal (reference `r`). Shape: (`p`, `length`).
         x_0 : array_like
-            Initial state vector.
+            Initial state vector. Shape: (`n`, 1).
 
         Returns
         -------
         t : np.ndarray
-            Time steps.
+            Time steps. Shape: (`1`, `length`).
         u : np.ndarray
-            Input to quantizer.
+            Input to quantizer. Shape: (`m`, `length`).
         v : np.ndarray
-            Quantized input.
+            Quantized input. Shape: (`m`, `length`).
         z : np.ndarray
-            Output signal.
+            Output signal. Shape: (`l`, `length`).
 
         References
         ----------
@@ -415,18 +415,18 @@ class System():
         Parameters
         ----------
         input : array_like
-            Input signal (reference r).
+            Input signal (reference `r`). Shape: (`p`, `length`).
         x_0 : array_like
-            Initial state vector.
+            Initial state vector. Shape: (`n`, 1).
 
         Returns
         -------
         t : np.ndarray
-            Time steps.
+            Time steps. Shape: (`1`, `length`).
         u : np.ndarray
-            Input signal to plant.
+            Input signal to plant. Shape: (`m`, `length`).
         z : np.ndarray
-            Output signal.
+            Output signal. Shape: (`l`, `length`).
 
         References
         ----------
@@ -461,19 +461,19 @@ class System():
         Parameters
         ----------
         A : array_like
-            State matrix (n x n).
+            State matrix (`n` x `n`), real.
         B1 : array_like
-            Input matrix for r (n x p).
+            Input matrix for r (`n` x `p`), real.
         B2 : array_like
-            Input matrix for v (n x m).
+            Input matrix for v (`n` x `m`), real.
         C1 : array_like
-            Output matrix for z (l x n).
+            Output matrix for z (`l` x `n`), real.
         C2 : array_like
-            Output matrix for u (m x n).
+            Output matrix for u (`m` x `n`), real.
         D1 : array_like
-            Feedthrough matrix for r to z (l x p).
+            Feedthrough matrix for r to z (`l` x `p`), real.
         D2 : array_like
-            Feedthrough matrix for r to u (m x p).
+            Feedthrough matrix for r to u (`m` x `p`), real.
 
         Raises
         ------
@@ -580,7 +580,7 @@ class System():
         Parameters
         ----------
         P : Plant
-            Plant instance.
+            Plant instance. The plant to which the quantizer is connected in feedforward.
 
         Returns
         -------
@@ -633,9 +633,9 @@ class System():
         Parameters
         ----------
         P : Plant
-            Plant instance.
+            Plant instance. The plant in the feedback loop.
         K : Controller
-            Controller instance.
+            Controller instance. The controller in the feedback loop.
 
         Returns
         -------
@@ -705,9 +705,9 @@ class System():
         Parameters
         ----------
         P : Plant
-            Plant instance.
+            Plant instance. The plant in the feedback loop.
         K : Controller
-            Controller instance.
+            Controller instance. The controller in the feedback loop.
 
         Returns
         -------
@@ -772,9 +772,9 @@ class System():
         Parameters
         ----------
         P : Plant
-            Plant instance.
+            Plant instance. The plant in the feedback loop.
         K : Controller
-            Controller instance.
+            Controller instance. The controller in the feedback loop.
 
         Returns
         -------
@@ -794,9 +794,9 @@ class System():
         Parameters
         ----------
         P : Plant
-            Plant instance.
+            Plant instance. The plant in the feedback loop.
         K : Controller
-            Controller instance.
+            Controller instance. The controller in the feedback loop.
 
         Returns
         -------
@@ -832,9 +832,9 @@ class System():
         Parameters
         ----------
         Q : DynamicQuantizer
-            Dynamic quantizer instance.
+            Dynamic quantizer instance. The quantizer whose performance is evaluated.
         steptime : int or InfInt, optional
-            Evaluation time (default: infint). Must be a natural number.
+            Evaluation time. Must be a natural number (`steptime` >= 1). Default: `infint`.
         _check_stability : bool, optional
             If True, check stability (default: True).
             This shouldn't be changed.
@@ -844,7 +844,7 @@ class System():
         Returns
         -------
         float
-            Estimated value of E(Q) in the given steptime.
+            Estimated value of E(Q) in the given `steptime`.
 
         References
         ----------
@@ -927,7 +927,7 @@ class System():
         Parameters
         ----------
         Q : DynamicQuantizer or StaticQuantizer
-            Quantizer instance.
+            Quantizer instance. The quantizer to check stability with.
 
         Returns
         -------
@@ -951,7 +951,7 @@ class System():
         Parameters
         ----------
         Q : DynamicQuantizer or StaticQuantizer
-            Quantizer instance.
+            Quantizer instance. The quantizer to check stability with.
 
         Returns
         -------

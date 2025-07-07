@@ -1775,7 +1775,7 @@ class DynamicQuantizer():
         >>> import nqlib
         >>> raise NotImplementedError()
         """
-        T = validate_int(
+        T = validate_int_or_inf(
             T,
             minimum=1,  # T must be greater than 0
             name="T",

@@ -1,0 +1,6 @@
+# packages required for building and testing the package
+pytest
+build
+twine
+setuptools
+distribute

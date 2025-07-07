@@ -8,6 +8,7 @@ nqlib.egg-info
 online-documentation
 article
 manual_tests
+.pytest_cache
 
 # キャッシュ
 __pycache__

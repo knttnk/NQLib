@@ -32,4 +32,5 @@ jobs:
           conda install -c conda-forge control=${{ matrix.control-version }} slycot cvxpy numpy>=2.0 scipy>=1.10.1 -y
       - name: Test with unittest
         run: |
-          python -m unittest discover tests
+          pip install --editable .
+          python -m pytest --doctest-modules

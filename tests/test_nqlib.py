@@ -2,14 +2,7 @@ import unittest
 import control
 import numpy
 import random
-import time
-import sys
-import pathlib
-nqlib_path = pathlib.Path(__file__).parent.parent / "nqlib"
-sys.path.append(str(nqlib_path))
-
 rand = random.random
-
 
 class NQLibTest(unittest.TestCase):
     def test_cost(self):

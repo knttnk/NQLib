@@ -14,7 +14,8 @@ grayskull pypi nqlib  # 前回のマージでこれを使うべきだと言わ�
 git clone https://github.com/knttnk/staged-recipes.git
 
 # nqlib という名前のブランチ名を作成してそこに移動
-git checkout -b nqlib  cd H:\マイドライブ\IshikawaMinamiLab\研究\NQLib\conda-release\staged-recipes
+git checkout -b nqlib
+cd H:\マイドライブ\IshikawaMinamiLab\研究\NQLib\conda-release\staged-recipes
 
 # conda-release/nqlib/meta.yaml を staged-recipes/nqlib/recipes に
 # meta.yaml の license_file を LICENSE.txt に変え，nqlibのそれをmeta.yamlの隣にコピー

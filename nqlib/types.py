@@ -98,25 +98,25 @@ def validate_int_or_inf(
     name: str = "",
 ) -> int | InfInt:
     """
-    Validates if the given value is an integer or InfInt.
+    Validates if the given value is an integer or `InfInt`.
 
     Parameters
     ----------
     val : Any
-        Value to validate.
+        Value to validate. Should be an integer or `InfInt`.
     minimum : int or None, optional
-        Minimum allowed value (inclusive). Default is None.
+        Minimum allowed value (inclusive). If specified, should satisfy `val >= minimum`.
     name : str, optional
         Name of the variable for error messages. Default is ''.
 
     Returns
     -------
     int or InfInt
-        Validated integer or InfInt value.
+        Validated integer or `InfInt` value.
 
     Notes
     -----
-    After validation, `minimum` <= `val` is satisfied. InfInt is allowed.
+    After validation, `val` satisfies `val >= minimum` if `minimum` is specified. `InfInt` is allowed.
     """
     # check type
     if isinstance(val, InfInt):
@@ -132,16 +132,16 @@ def validate_int(
     name: str = "",
 ) -> int:
     """
-    Validates if the given value is an integer or InfInt.
+    Validates if the given value is an integer.
 
     Parameters
     ----------
     val : Any
-        Value to validate.
+        Value to validate. Should be an integer.
     minimum : int or None, optional
-        Minimum allowed value (inclusive). Default is None.
+        Minimum allowed value (inclusive). If specified, should satisfy `val >= minimum`.
     maximum : int or None, optional
-        Maximum allowed value (inclusive). Default is None.
+        Maximum allowed value (inclusive). If specified, should satisfy `val <= maximum`.
     name : str, optional
         Name of the variable for error messages. Default is ''.
 
@@ -150,9 +150,16 @@ def validate_int(
     int
         Validated integer value.
 
+    Raises
+    ------
+    TypeError
+        If the value is not an integer.
+    ValueError
+        If the value is out of the specified range.
+
     Notes
     -----
-    After validation, `minimum` <= `val` <= `maximum` is satisfied.
+    After validation, `val` satisfies `val >= minimum` and `val <= maximum` if specified.
     """
     if not float(val).is_integer():
         raise TypeError(
@@ -186,15 +193,15 @@ def validate_float(
     Parameters
     ----------
     val : Any
-        Value to validate.
+        Value to validate. Should be a float or integer.
     minimum : float or None, optional
-        Minimum allowed value (inclusive). Default is None.
+        Minimum allowed value (inclusive). If specified, should satisfy `val >= minimum`.
     maximum : float or None, optional
-        Maximum allowed value (inclusive). Default is None.
+        Maximum allowed value (inclusive). If specified, should satisfy `val <= maximum`.
     infimum : float or None, optional
-        Lower bound (exclusive). Default is None.
+        Lower bound (exclusive). If specified, should satisfy `val > infimum`.
     supremum : float or None, optional
-        Upper bound (exclusive). Default is None.
+        Upper bound (exclusive). If specified, should satisfy `val < supremum`.
     name : str, optional
         Name of the variable for error messages. Default is ''.
 
@@ -206,18 +213,18 @@ def validate_float(
     Raises
     ------
     TypeError
-        If the value is not a float.
+        If the value is not a float or integer.
     ValueError
         If the value is out of the specified range.
 
     Notes
     -----
-    After validation,
-    `minimum` <= `val`,
-    `infimum` < `val`,
-    `val` < `supremum`,
-    `val` <= `maximum`
-    are satisfied.
+    After validation, the following are satisfied (if specified):
+    - `val >= minimum`
+    - `val > infimum`
+    - `val < supremum`
+    - `val <= maximum`
+    Cannot specify both `minimum` and `infimum`, or both `maximum` and `supremum`.
     """
     if not isinstance(val, (float, int, Real)):
         raise TypeError(f"{name} must be a float, but got {val} of type {type(val)}.")

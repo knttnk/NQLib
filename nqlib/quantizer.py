@@ -60,6 +60,13 @@ class ConnectionType(_Enum):
 class StaticQuantizer():
     """
     Static quantizer.
+
+    Example
+    -------
+    >>> import nqlib
+    >>> q = nqlib.StaticQuantizer.mid_tread(0.1)
+    >>> q([0.05, 0.15])
+    array([0., 0.1])
     """
 
     def __init__(self,
@@ -86,6 +93,14 @@ class StaticQuantizer():
             If `function` is not callable.
         ValueError
             If quantization error exceeds `delta` and `error_on_excess` is True.
+
+        Example
+        -------
+        >>> import nqlib
+        >>> import numpy as np
+        >>> q = nqlib.StaticQuantizer(lambda u: np.round(u), 1.0)
+        >>> q([1.2, 2.3])
+        array([1., 2.])
         """
         self.delta = validate_float(
             delta,
@@ -144,6 +159,13 @@ class StaticQuantizer():
         -------
         NDArrayNum
             Quantized signal.
+
+        Example
+        -------
+        >>> import nqlib
+        >>> q = nqlib.StaticQuantizer.mid_tread(0.2)
+        >>> q([0.1, 0.3])
+        array([0., 0.2])
         """
         return self.quantize(u)
 
@@ -160,6 +182,13 @@ class StaticQuantizer():
         -------
         NDArrayNum
             Quantized signal.
+
+        Example
+        -------
+        >>> import nqlib
+        >>> q = nqlib.StaticQuantizer.mid_tread(0.2)
+        >>> q.quantize([0.1, 0.3])
+        array([0., 0.2])
         """
         return self._function(u)
 
@@ -187,6 +216,13 @@ class StaticQuantizer():
         -------
         q : StaticQuantizer
             Mid-tread quantizer instance.
+
+        Example
+        -------
+        >>> import nqlib
+        >>> q = nqlib.StaticQuantizer.mid_tread(0.5)
+        >>> q([0.2, 0.7, 1.1])
+        array([0., 0.5, 1. ])
         """
         try:
             if d <= 0:
@@ -249,6 +285,13 @@ class StaticQuantizer():
         -------
         StaticQuantizer
             Mid-riser quantizer instance.
+
+        Example
+        -------
+        >>> import nqlib
+        >>> q = nqlib.StaticQuantizer.mid_riser(0.5)
+        >>> q([0.2, 0.7, 1.1])
+        array([0.25, 0.75, 1.25])
         """
         d = validate_float(
             d,
@@ -530,6 +573,18 @@ class DynamicQuantizer():
         Output matrix (m x N, real or complex).
     q : StaticQuantizer
         Static quantizer instance.
+
+    Example
+    -------
+    >>> import nqlib
+    >>> q = nqlib.StaticQuantizer.mid_tread(1.0)
+    >>> import numpy as np
+    >>> A = np.array([[0.5]])
+    >>> B = np.array([[1.0]])
+    >>> C = np.array([[1.0]])
+    >>> dq = nqlib.DynamicQuantizer(A, B, C, q)
+    >>> dq.quantize([[0.2, 0.6]])
+    array([[0., 1.]])
     """
 
     def __init__(self, A: NDArrayNum, B: NDArrayNum, C: NDArrayNum, q: StaticQuantizer):
@@ -556,6 +611,18 @@ class DynamicQuantizer():
         ------
         ValueError
             If matrix dimensions are inconsistent.
+
+        Example
+        -------
+        >>> import nqlib
+        >>> q = nqlib.StaticQuantizer.mid_tread(1.0)
+        >>> import numpy as np
+        >>> A = np.array([[0.5]])
+        >>> B = np.array([[1.0]])
+        >>> C = np.array([[1.0]])
+        >>> Q = nqlib.DynamicQuantizer(A, B, C, q)
+        >>> Q([0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6])
+        array([0., 1., 1., 1., 1., 1., 1.])
         """
         A_mat = matrix(A)
         B_mat = matrix(B)
@@ -696,6 +763,15 @@ class DynamicQuantizer():
         .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
            quantizers for discrete-valued input control;IEEE Transactions
            on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
+
+        Example
+        -------
+        >>> import nqlib
+        >>> q = nqlib.StaticQuantizer.mid_tread(0.1)
+        >>> import numpy as np
+        >>> dq = nqlib.DynamicQuantizer(np.eye(1), np.eye(1), np.eye(1), q)
+        >>> dq.gain_wv(steptime=5)
+        6.0
         """
         if verbose:
             print("Calculating gain w->v...")
@@ -761,6 +837,11 @@ class DynamicQuantizer():
            synthesis of dynamic quantizers with fixed-structures; International
            Journal of Computational Intelligence and Applications, Vol. 15,
            No. 2, 1650008 (2016)
+
+        Example
+        -------
+        >>> import nqlib
+        >>> raise NotImplementedError()
         """
         T = validate_int_or_inf(
             T,
@@ -825,6 +906,18 @@ class DynamicQuantizer():
         You should check the performance and gain yourself.
 
         This function requires slycot. Please install it.
+
+        Example
+        -------
+        >>> import nqlib
+        >>> q = nqlib.StaticQuantizer.mid_tread(0.1)
+        >>> import numpy as np
+        >>> Q = nqlib.DynamicQuantizer(np.eye(1), np.eye(1), np.eye(1), q)
+        >>> Q.N  # Original order
+        2
+        >>> Q2 = Q.order_reduced(1)  # Reduce the order to 1
+        >>> Q2.N
+        1
         """
         dim = validate_int(
             dim,
@@ -869,6 +962,15 @@ class DynamicQuantizer():
            for feedback control with discrete-level actuators; Journal of 
            Dynamic Systems, Measurement, and Control, Vol. 133, No. 2, 021005
            (2011)
+
+        Example
+        -------
+        >>> import nqlib
+        >>> q = nqlib.StaticQuantizer.mid_tread(0.1)
+        >>> import numpy as np
+        >>> Q = nqlib.DynamicQuantizer(np.array([[0.5]]), np.array([[1.0]]), np.array([[1.0]]), q)
+        >>> Q.is_stable
+        True
         """
         if eig_max(self.A + self.B @ self.C) > 1 - 1e-8:
             return False
@@ -884,6 +986,16 @@ class DynamicQuantizer():
         -------
         DynamicQuantizer
             Minimal realization of this quantizer.
+
+        Example
+        -------
+        >>> import nqlib
+        >>> q = nqlib.StaticQuantizer.mid_tread(0.1)
+        >>> import numpy as np
+        >>> Q = nqlib.DynamicQuantizer(np.eye(1), np.eye(1), np.eye(1), q)
+        >>> Q2 = Q.minreal
+        >>> Q2.N
+        1
         """
         minreal_ss: _ctrl.StateSpace = _ctrl.ss(
             self.A,
@@ -953,6 +1065,11 @@ class DynamicQuantizer():
         ------
         ValueError
             If system is unstable.
+
+        Example
+        -------
+        >>> import nqlib
+        >>> raise NotImplementedError()
         """
         def _print_report(Q: "DynamicQuantizer | None", method: str):
             if verbose:
@@ -1122,6 +1239,11 @@ class DynamicQuantizer():
         ------
         ValueError
             If system is unstable.
+
+        Example
+        -------
+        >>> import nqlib
+        >>> raise NotImplementedError()
         """
         if verbose:
             print("Trying to calculate optimal dynamic quantizer...")
@@ -1246,6 +1368,11 @@ class DynamicQuantizer():
            software for dynamic quantizers in control systems; SICE Journal 
            of Control, Measurement, and System Integration, Vol. 4, No. 5, 
            pp. 372-379 (2011)
+
+        Example
+        -------
+        >>> import nqlib
+        >>> raise NotImplementedError()
         """
         if verbose:
             print("Trying to design a dynamic quantizer using LP...")
@@ -1503,6 +1630,11 @@ class DynamicQuantizer():
            synthesis of dynamic quantizers with fixed-structures; International
            Journal of Computational Intelligence and Applications, Vol. 15,
            No. 2, 1650008 (2016)
+
+        Example
+        -------
+        >>> import nqlib
+        >>> raise NotImplementedError()
         """
         T = validate_int_or_inf(
             T,
@@ -1637,6 +1769,11 @@ class DynamicQuantizer():
            synthesis of dynamic quantizers with fixed-structures; International
            Journal of Computational Intelligence and Applications, Vol. 15,
            No. 2, 1650008 (2016)
+
+        Example
+        -------
+        >>> import nqlib
+        >>> raise NotImplementedError()
         """
         T = validate_int(
             T,
@@ -1738,6 +1875,16 @@ class DynamicQuantizer():
         -------
         NDArrayNum
             Quantized signal. Shape: (1, length).
+
+        Example
+        -------
+        >>> import nqlib
+        >>> q = nqlib.StaticQuantizer.mid_tread(0.1)
+        >>> import numpy as np
+        >>> Q = nqlib.DynamicQuantizer(np.eye(1), np.eye(1), np.eye(1), q)
+        >>> Q.quantize([[0.2, 0.4]])
+        array([[0., 0.]])
+
         """
         u = matrix(u)
         length = u.shape[1]
@@ -1778,6 +1925,11 @@ class DynamicQuantizer():
         .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
            quantizers for discrete-valued input control;IEEE Transactions
            on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
+
+        Example
+        -------
+        >>> import nqlib
+        >>> raise NotImplementedError()
         """
         return system.E(self, steptime, _check_stability)
 
@@ -1799,6 +1951,15 @@ class DynamicQuantizer():
         -------
         str
             Specification summary.
+
+        Example
+        -------
+        >>> import nqlib
+        >>> q = nqlib.StaticQuantizer.mid_tread(0.1)
+        >>> import numpy as np
+        >>> dq = nqlib.DynamicQuantizer(np.eye(1), np.eye(1), np.eye(1), q)
+        >>> dq.spec(show=False)
+        'The specs of ...'
         """
         s = (
             "The specs of \n"
@@ -1834,6 +1995,18 @@ def order_reduced(Q: DynamicQuantizer, dim: int) -> DynamicQuantizer:
     -------
     DynamicQuantizer
         Quantizer with reduced order.
+
+    Example
+    -------
+    >>> import nqlib
+    >>> q = nqlib.StaticQuantizer.mid_tread(0.1)
+    >>> import numpy as np
+    >>> Q = nqlib.DynamicQuantizer(np.eye(1), np.eye(1), np.eye(1), q)
+    >>> Q.N  # Original order
+    2
+    >>> Q2 = order_reduced(Q, 1)  # Reduce the order to 1
+    >>> Q2.N
+    1
     """
     # check Q
     if type(Q) is not DynamicQuantizer:

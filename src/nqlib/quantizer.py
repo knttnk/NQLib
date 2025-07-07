@@ -64,9 +64,10 @@ class StaticQuantizer():
     Example
     -------
     >>> import nqlib
+    >>> import numpy as np
     >>> q = nqlib.StaticQuantizer.mid_tread(0.1)
-    >>> q([0.05, 0.15])
-    array([0., 0.1])
+    >>> q([0.04, 0.16])
+    array([0. , 0.2])
     """
 
     def __init__(self,
@@ -164,8 +165,8 @@ class StaticQuantizer():
         -------
         >>> import nqlib
         >>> q = nqlib.StaticQuantizer.mid_tread(0.2)
-        >>> q([0.1, 0.3])
-        array([0., 0.2])
+        >>> q([0.04, 0.16])
+        array([0. , 0.2])
         """
         return self.quantize(u)
 
@@ -186,9 +187,12 @@ class StaticQuantizer():
         Example
         -------
         >>> import nqlib
-        >>> q = nqlib.StaticQuantizer.mid_tread(0.2)
-        >>> q.quantize([0.1, 0.3])
-        array([0., 0.2])
+        >>> q = nqlib.StaticQuantizer.mid_tread(0.5)
+        >>> u = [0, 0.32, 0.44]
+        >>> all(q.quantize(u) == q(u))
+        True
+        >>> q.quantize(u)
+        array([0. , 0.5, 0.5])
         """
         return self._function(u)
 
@@ -221,8 +225,8 @@ class StaticQuantizer():
         -------
         >>> import nqlib
         >>> q = nqlib.StaticQuantizer.mid_tread(0.5)
-        >>> q([0.2, 0.7, 1.1])
-        array([0., 0.5, 1. ])
+        >>> q([0.2, 0.7, 1.1, 0, -1])
+        array([ 0. ,  0.5,  1. ,  0. , -1. ])
         """
         try:
             if d <= 0:
@@ -237,7 +241,7 @@ class StaticQuantizer():
         # function to quantize
 
         def q(u: NDArrayNum) -> NDArrayNum:
-            return ((u + d / 2) // d) * d
+            return ((_np.array(u) + d / 2) // d) * d
 
         # limit the values
         bit = validate_int_or_inf(
@@ -290,8 +294,8 @@ class StaticQuantizer():
         -------
         >>> import nqlib
         >>> q = nqlib.StaticQuantizer.mid_riser(0.5)
-        >>> q([0.2, 0.7, 1.1])
-        array([0.25, 0.75, 1.25])
+        >>> q([0.2, 0.7, 1.1, 0, -1])
+        array([ 0.25,  0.75,  1.25,  0.25, -0.75])
         """
         d = validate_float(
             d,
@@ -301,7 +305,7 @@ class StaticQuantizer():
 
         # function to quantize
         def q(u: NDArrayNum) -> NDArrayNum:
-            return (u // d + 1 / 2) * d
+            return ((_np.array(u) // d) + 1 / 2) * d
 
         # limit the values
         bit = validate_int_or_inf(
@@ -579,12 +583,12 @@ class DynamicQuantizer():
     >>> import nqlib
     >>> q = nqlib.StaticQuantizer.mid_tread(1.0)
     >>> import numpy as np
-    >>> A = np.array([[0.5]])
+    >>> A = np.array([[0.6]])
     >>> B = np.array([[1.0]])
     >>> C = np.array([[1.0]])
-    >>> dq = nqlib.DynamicQuantizer(A, B, C, q)
-    >>> dq.quantize([[0.2, 0.6]])
-    array([[0., 1.]])
+    >>> Q = nqlib.DynamicQuantizer(A, B, C, q)
+    >>> Q.quantize([0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4])
+    array([[ 0.,  0.,  0.,  0.,  0., -1., -2., -3.]])
     """
 
     def __init__(self, A: NDArrayNum, B: NDArrayNum, C: NDArrayNum, q: StaticQuantizer):
@@ -617,12 +621,12 @@ class DynamicQuantizer():
         >>> import nqlib
         >>> q = nqlib.StaticQuantizer.mid_tread(1.0)
         >>> import numpy as np
-        >>> A = np.array([[0.5]])
+        >>> A = np.array([[0.6]])
         >>> B = np.array([[1.0]])
         >>> C = np.array([[1.0]])
         >>> Q = nqlib.DynamicQuantizer(A, B, C, q)
-        >>> Q([0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6])
-        array([0., 1., 1., 1., 1., 1., 1.])
+        >>> Q.quantize([0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6])
+        array([[1., 1., 1., 1., 1., 2., 3.]])
         """
         A_mat = matrix(A)
         B_mat = matrix(B)
@@ -769,9 +773,9 @@ class DynamicQuantizer():
         >>> import nqlib
         >>> q = nqlib.StaticQuantizer.mid_tread(0.1)
         >>> import numpy as np
-        >>> dq = nqlib.DynamicQuantizer(np.eye(1), np.eye(1), np.eye(1), q)
-        >>> dq.gain_wv(steptime=5)
-        6.0
+        >>> dq = nqlib.DynamicQuantizer(0.5, 0.1, 0.1, q)
+        >>> dq.gain_wv() < 1.021
+        np.True_
         """
         if verbose:
             print("Calculating gain w->v...")
@@ -837,11 +841,6 @@ class DynamicQuantizer():
            synthesis of dynamic quantizers with fixed-structures; International
            Journal of Computational Intelligence and Applications, Vol. 15,
            No. 2, 1650008 (2016)
-
-        Example
-        -------
-        >>> import nqlib
-        >>> raise NotImplementedError()
         """
         T = validate_int_or_inf(
             T,
@@ -912,7 +911,7 @@ class DynamicQuantizer():
         >>> import nqlib
         >>> q = nqlib.StaticQuantizer.mid_tread(0.1)
         >>> import numpy as np
-        >>> Q = nqlib.DynamicQuantizer(np.eye(1), np.eye(1), np.eye(1), q)
+        >>> Q = nqlib.DynamicQuantizer(np.eye(2)*0.5, np.eye(2, 1), np.eye(1, 2), q)
         >>> Q.N  # Original order
         2
         >>> Q2 = Q.order_reduced(1)  # Reduce the order to 1
@@ -970,7 +969,7 @@ class DynamicQuantizer():
         >>> import numpy as np
         >>> Q = nqlib.DynamicQuantizer(np.array([[0.5]]), np.array([[1.0]]), np.array([[1.0]]), q)
         >>> Q.is_stable
-        True
+        False
         """
         if eig_max(self.A + self.B @ self.C) > 1 - 1e-8:
             return False
@@ -992,7 +991,7 @@ class DynamicQuantizer():
         >>> import nqlib
         >>> q = nqlib.StaticQuantizer.mid_tread(0.1)
         >>> import numpy as np
-        >>> Q = nqlib.DynamicQuantizer(np.eye(1), np.eye(1), np.eye(1), q)
+        >>> Q = nqlib.DynamicQuantizer(1, 1, 1, q)
         >>> Q2 = Q.minreal
         >>> Q2.N
         1
@@ -1069,7 +1068,26 @@ class DynamicQuantizer():
         Example
         -------
         >>> import nqlib
-        >>> raise NotImplementedError()
+        >>> import numpy as np
+        >>> P = nqlib.Plant(
+        ...     A =[[ 1.8, 0.8],
+        ...         [-1.0, 0. ]],
+        ...     B =[[1.],
+        ...         [0.]],
+        ...     C1 =[0.01, -0.09],
+        ...     C2 =[0, 0],
+        ... )
+        >>> G = nqlib.System.from_FF(P)
+        >>> q = nqlib.StaticQuantizer.mid_tread(d=2)
+        >>> Q, E = nqlib.DynamicQuantizer.design(
+        ...     system=G,
+        ...     q=q,
+        ...     T=100,
+        ... )
+        >>> Q.is_stable
+        True
+        >>> E < 0.5
+        np.True_
         """
         def _print_report(Q: "DynamicQuantizer | None", method: str):
             if verbose:
@@ -1243,7 +1261,22 @@ class DynamicQuantizer():
         Example
         -------
         >>> import nqlib
-        >>> raise NotImplementedError()
+        >>> import numpy as np
+        >>> P = nqlib.Plant(
+        ...     A =[[ 1.8, 0.8],
+        ...         [-1.0, 0. ]],
+        ...     B =[[1.],
+        ...         [0.]],
+        ...     C1 =[0.01, -0.09],
+        ...     C2 =[0, 0],
+        ... )
+        >>> G = nqlib.System.from_FF(P)
+        >>> q = nqlib.StaticQuantizer.mid_tread(d=2)
+        >>> Q, E = nqlib.DynamicQuantizer.design_AG(system=G, q=q)
+        >>> Q.is_stable
+        True
+        >>> E < 0.5
+        np.True_
         """
         if verbose:
             print("Trying to calculate optimal dynamic quantizer...")
@@ -1372,7 +1405,28 @@ class DynamicQuantizer():
         Example
         -------
         >>> import nqlib
-        >>> raise NotImplementedError()
+        >>> import numpy as np
+        >>> P = nqlib.Plant(
+        ...     A =[[ 1.8, 0.8],
+        ...         [-1.0, 0. ]],
+        ...     B =[[1.],
+        ...         [0.]],
+        ...     C1 =[0.01, -0.09],
+        ...     C2 =[0, 0],
+        ... )
+        >>> G = nqlib.System.from_FF(P)
+        >>> q = nqlib.StaticQuantizer.mid_tread(d=2)
+        >>> Q, E = nqlib.DynamicQuantizer.design_LP(
+        ...     system=G,
+        ...     q=q,
+        ...     T=100,
+        ...     dim=2,
+        ...     gain_wv=2.0,
+        ... )
+        >>> Q.is_stable
+        True
+        >>> E < 0.5
+        np.True_
         """
         if verbose:
             print("Trying to design a dynamic quantizer using LP...")
@@ -1634,7 +1688,27 @@ class DynamicQuantizer():
         Example
         -------
         >>> import nqlib
-        >>> raise NotImplementedError()
+        >>> import numpy as np
+        >>> G = nqlib.System(
+        ...     A=[[1.15, 0.05],
+        ...        [0.00, 0.99]],
+        ...     B1=[[1],
+        ...         [1]],
+        ...     B2=[[0.004],
+        ...         [0.099]],
+        ...     C1=[1., 0.], C2=[-15., -3.],
+        ...     D1=0, D2=0,
+        ... )
+        >>> q = nqlib.StaticQuantizer.mid_tread(d=2)
+        >>> Q, E = nqlib.DynamicQuantizer.design_GD(
+        ...     system=G,
+        ...     q=q,
+        ...     dim=2,
+        ... )
+        >>> Q.is_stable
+        True
+        >>> E < 0.01
+        np.True_
         """
         T = validate_int_or_inf(
             T,
@@ -1773,7 +1847,27 @@ class DynamicQuantizer():
         Example
         -------
         >>> import nqlib
-        >>> raise NotImplementedError()
+        >>> import numpy as np
+        >>> G = nqlib.System(
+        ...     A=[[1.15, 0.05],
+        ...        [0.00, 0.99]],
+        ...     B1=[[1],
+        ...         [1]],
+        ...     B2=[[0.004],
+        ...         [0.099]],
+        ...     C1=[1., 0.], C2=[-15., -3.],
+        ...     D1=0, D2=0,
+        ... )
+        >>> q = nqlib.StaticQuantizer.mid_tread(d=2)
+        >>> Q, E = nqlib.DynamicQuantizer.design_DE(
+        ...     system=G,
+        ...     q=q,
+        ...     dim=2,
+        ... )
+        >>> Q.is_stable
+        True
+        >>> E < 0.01
+        np.True_
         """
         T = validate_int_or_inf(
             T,
@@ -1879,12 +1973,11 @@ class DynamicQuantizer():
         Example
         -------
         >>> import nqlib
-        >>> q = nqlib.StaticQuantizer.mid_tread(0.1)
+        >>> q = nqlib.StaticQuantizer.mid_tread(0.3)
         >>> import numpy as np
-        >>> Q = nqlib.DynamicQuantizer(np.eye(1), np.eye(1), np.eye(1), q)
+        >>> Q = nqlib.DynamicQuantizer(1, 1, 1, q)
         >>> Q.quantize([[0.2, 0.4]])
-        array([[0., 0.]])
-
+        array([[0.3, 0.6]])
         """
         u = matrix(u)
         length = u.shape[1]
@@ -1929,7 +2022,24 @@ class DynamicQuantizer():
         Example
         -------
         >>> import nqlib
-        >>> raise NotImplementedError()
+        >>> import numpy as np
+        >>> G = nqlib.System(
+        ...     A=[[1.15, 0.05],
+        ...        [0.00, 0.99]],
+        ...     B1=[[1],
+        ...         [1]],
+        ...     B2=[[0.004],
+        ...         [0.099]],
+        ...     C1=[1., 0.], C2=[-15., -3.],
+        ...     D1=0, D2=0,
+        ... )
+        >>> q = nqlib.StaticQuantizer.mid_tread(d=2)
+        >>> Q, E = nqlib.DynamicQuantizer.design_AG(
+        ...     system=G,
+        ...     q=q,
+        ... )
+        >>> np.isclose(E, Q.cost(G))
+        np.True_
         """
         return system.E(self, steptime, _check_stability)
 
@@ -1957,8 +2067,8 @@ class DynamicQuantizer():
         >>> import nqlib
         >>> q = nqlib.StaticQuantizer.mid_tread(0.1)
         >>> import numpy as np
-        >>> dq = nqlib.DynamicQuantizer(np.eye(1), np.eye(1), np.eye(1), q)
-        >>> dq.spec(show=False)
+        >>> Q = nqlib.DynamicQuantizer(1, 1, 1, q)
+        >>> Q.spec(show=False)
         'The specs of ...'
         """
         s = (
@@ -2001,18 +2111,13 @@ def order_reduced(Q: DynamicQuantizer, dim: int) -> DynamicQuantizer:
     >>> import nqlib
     >>> q = nqlib.StaticQuantizer.mid_tread(0.1)
     >>> import numpy as np
-    >>> Q = nqlib.DynamicQuantizer(np.eye(1), np.eye(1), np.eye(1), q)
+    >>> Q = nqlib.DynamicQuantizer(np.eye(2)*0.4, np.eye(2, 1), np.eye(1, 2), q)
     >>> Q.N  # Original order
     2
     >>> Q2 = order_reduced(Q, 1)  # Reduce the order to 1
     >>> Q2.N
     1
     """
-    # check Q
-    if type(Q) is not DynamicQuantizer:
-        raise TypeError(
-            '`Q` must be an instance of `nqlib.DynamicQuantizer`.'
-        )
     dim = validate_int(
         dim,
         minimum=1,  # order must be greater than 0

@@ -22,7 +22,7 @@ class NQLibTest(unittest.TestCase):
         q = nqlib.StaticQuantizer.mid_tread(d=2)
         Q, E = nqlib.DynamicQuantizer.design(G,
                                              q=q,
-                                             verbose=False)
+                                             verbose=True)
         E_E = G.E(Q)
         E_cost = Q.cost(G)
         self.assertAlmostEqual(E, E_E)
@@ -45,7 +45,7 @@ class NQLibTest(unittest.TestCase):
         q = nqlib.StaticQuantizer.mid_tread(d=2)
         Q, E = nqlib.DynamicQuantizer.design(G,
                                              q=q,
-                                             verbose=False)
+                                             verbose=True)
         t = numpy.arange(0, 101, 1)
         r = 0.3 * numpy.sin(0.1 * numpy.pi * t) - 0.5 * numpy.cos(0.03 * numpy.pi * t)
         x_0 = [[0.1],
@@ -81,7 +81,7 @@ class NQLibTest(unittest.TestCase):
             ideal_system,
             q=q,
             dim=5,
-            verbose=False,
+            verbose=True,
         )
         # BUG: GDで勾配が0になるのか最適化がされず係数が全て0になることがある
         Q_1 = Q_5.order_reduced(1)
@@ -287,7 +287,7 @@ class NQLibTest(unittest.TestCase):
         Q, E = nqlib.DynamicQuantizer.design_AG(
             ideal_system,
             q=q,
-            verbose=False,
+            verbose=True,
         )
 
         self.assertAlmostEqual(
@@ -319,7 +319,7 @@ class NQLibTest(unittest.TestCase):
 
         Q, E = nqlib.DynamicQuantizer.design_AG(ideal_system,
                                                 q=q,
-                                                verbose=False)
+                                                verbose=True)
 
         self.assertAlmostEqual(
             0.004, E,
@@ -352,7 +352,7 @@ class NQLibTest(unittest.TestCase):
                                                 T=100,
                                                 gain_wv=2,
                                                 dim=5,
-                                                verbose=False)
+                                                verbose=True)
 
         self.assertAlmostEqual(
             0.023360532739376112, E,
@@ -388,7 +388,7 @@ class NQLibTest(unittest.TestCase):
                                                 T=11,
                                                 gain_wv=2,
                                                 dim=2,
-                                                verbose=False)
+                                                verbose=True)
 
     def test_LP_MIMO2(self):
         import nqlib
@@ -414,7 +414,7 @@ class NQLibTest(unittest.TestCase):
                                                 T=11,
                                                 gain_wv=2,
                                                 dim=1,
-                                                verbose=False)
+                                                verbose=True)
 
     def test_GD(self):
         import nqlib
@@ -424,6 +424,7 @@ class NQLibTest(unittest.TestCase):
                          [0.00, 0.99]])
         B2 = numpy.array([[0.004],
                           [0.099]])
+        C1 = numpy.array([1., 0.])
         C2 = numpy.array([-15., -3.], ndmin=2)
         D_shape = (1, 1)
 
@@ -431,39 +432,43 @@ class NQLibTest(unittest.TestCase):
             A=A,
             B1=randn(B2.shape),
             B2=B2,
-            C1=randn(C2.shape),
+            C1=C1,
             C2=C2,
             D1=randn(D_shape),
             D2=randn(D_shape),
         )
 
         q = nqlib.StaticQuantizer.mid_tread(d=2)
-        Q, E = nqlib.DynamicQuantizer.design_AG(ideal_system,
-                                                q=q,
-                                                verbose=False)
+        Q, E = nqlib.DynamicQuantizer.design_AG(
+            ideal_system,
+            q=q,
+            verbose=True,
+        )
 
-        if Q is not None:
-            if E > 1000:
-                print("E is inf")
+        print(ideal_system)
+        self.assertIsNotNone(Q, "Quantizer Q is None")
 
-            # 勾配法
-            Q_g, E_g = nqlib\
-                .DynamicQuantizer\
-                .design_GD(ideal_system,
-                           q=q,
-                           dim=A.shape[0],
-                           verbose=False)
-            print(f"optimal E = {E}, optimized E_g = {E_g}")
+        if E > 1000:
+            print("E is inf")
 
-            self.assertAlmostEqual(
-                E_g, E,
-                places=1,
-                msg=(
-                    f"optimal E = {E}, optimized E_g = {E_g}\n"
-                    f"system:\n"
-                    f"{ideal_system}"
-                ),
-            )
+        # 勾配法
+        Q_g, E_g = nqlib.DynamicQuantizer.design_GD(
+            ideal_system,
+            q=q,
+            dim=A.shape[0],
+            verbose=True,
+        )
+        print(f"optimal E = {E}, optimized E_g = {E_g}")
+
+        self.assertAlmostEqual(
+            E_g, E,
+            places=1,
+            msg=(
+                f"optimal E = {E}, optimized E_g = {E_g}\n"
+                f"system:\n"
+                f"{ideal_system}"
+            ),
+        )
 
     def test_DE(self):
         import nqlib
@@ -473,6 +478,7 @@ class NQLibTest(unittest.TestCase):
                          [0.00, 0.99]])
         B2 = numpy.array([[0.004],
                           [0.099]])
+        C1 = numpy.array([1., 0.])
         C2 = numpy.array([-15., -3.], ndmin=2)
         D_shape = (1, 1)
 
@@ -480,7 +486,7 @@ class NQLibTest(unittest.TestCase):
             A=A,
             B1=randn(B2.shape),
             B2=B2,
-            C1=randn(C2.shape),
+            C1=C1,
             C2=C2,
             D1=randn(D_shape),
             D2=randn(D_shape),
@@ -489,29 +495,30 @@ class NQLibTest(unittest.TestCase):
         q = nqlib.StaticQuantizer.mid_tread(d=2)
         Q, E = nqlib.DynamicQuantizer.design_AG(ideal_system,
                                                 q=q,
-                                                verbose=False)
+                                                verbose=True)
 
-        if Q is not None:
-            if E > 1000:
-                print("E is inf")
+        self.assertIsNotNone(Q, "Quantizer Q is None")
 
-            # 進化型
-            Q_d, E_d = nqlib\
-                .DynamicQuantizer\
-                .design_DE(ideal_system,
-                           q=q,
-                           dim=Q.minreal.A.shape[0],
-                           verbose=False)
+        if E > 1000:
+            print("E is inf")
 
-            self.assertAlmostEqual(
-                E_d, E,
-                places=1,
-                msg=(
-                    f"optimal E = {E}, optimized E_d = {E_d}\n"
-                    f"system:\n"
-                    f"{ideal_system}"
-                ),
-            )
+        # 進化型
+        Q_d, E_d = nqlib.DynamicQuantizer.design_DE(
+            ideal_system,
+            q=q,
+            dim=Q.minreal.A.shape[0],
+            verbose=True,
+        )
+
+        self.assertAlmostEqual(
+            E_d, E,
+            places=1,
+            msg=(
+                f"optimal E = {E}, optimized E_d = {E_d}\n"
+                f"system:\n"
+                f"{ideal_system}"
+            ),
+        )
 
 
 if __name__ == "__main__":

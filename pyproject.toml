@@ -29,5 +29,5 @@ dependencies = ['numpy', 'scipy>=1.10.1', 'slycot', 'control', 'cvxpy']
 "Homepage" = "https://github.com/knttnk/NQLib"
 
 [tool.pytest.ini_options]
-addopts = ["--import-mode=importlib"]
-testpaths = ["tests"]
+addopts = ["--import-mode=importlib", "--doctest-modules"]
+testpaths = ["tests", "src/nqlib"]

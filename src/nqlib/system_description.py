@@ -298,7 +298,7 @@ class Plant(object):
         -------
         >>> import nqlib
         >>> import control
-        >>> tf = control.TransferFunction([1], [1, -0.5], 1)
+        >>> tf = control.TransferFunction([1], [1, 2, 1], 1)  # 1 / (s^2 + 2s + 1)
         >>> P = nqlib.Plant.from_TF(tf)
         >>> P.A.shape[0]
         2
@@ -673,9 +673,16 @@ class System():
         -------
         >>> import nqlib
         >>> import numpy as np
-        >>> P = nqlib.Plant(np.eye(1), np.eye(1), np.eye(1), np.eye(1))
-        >>> sys = nqlib.System.from_FF(P)
-        >>> sys.type == nqlib.ConnectionType.FF
+        >>> P = nqlib.Plant(
+        ...     A =[[ 1.8, 0.8],
+        ...         [-1.0, 0. ]],
+        ...     B =[[1.],
+        ...         [0.]],
+        ...     C1 =[0.01, -0.09],
+        ...     C2 =[0, 0],
+        ... )
+        >>> G = nqlib.System.from_FF(P)
+        >>> G.is_stable
         True
         """
         n = P.A.shape[0]
@@ -737,11 +744,11 @@ class System():
         -------
         >>> import nqlib
         >>> import numpy as np
-        >>> P = nqlib.Plant(np.eye(1), np.eye(1), np.eye(1), np.eye(1))
-        >>> K = nqlib.Controller(np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1))
+        >>> P = nqlib.Plant(0.5, 1, 1, 1)
+        >>> K = nqlib.Controller(0, 1, 1, 1, 1, 1)
         >>> sys = nqlib.System.from_FB_connection_with_input_quantizer(P, K)
-        >>> sys.type == nqlib.ConnectionType.FB_WITH_INPUT_QUANTIZER
-        True
+        >>> sys.is_stable
+        False
         """
         if P.l2 != K.p:
             raise ValueError(
@@ -819,11 +826,11 @@ class System():
         -------
         >>> import nqlib
         >>> import numpy as np
-        >>> P = nqlib.Plant(np.eye(1), np.eye(1), np.eye(1), np.eye(1))
-        >>> K = nqlib.Controller(np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1))
+        >>> P = nqlib.Plant(0.5, 1, 1, 1)
+        >>> K = nqlib.Controller(0, 1, 1, 1, 1, 1)
         >>> sys = nqlib.System.from_FB_connection_with_output_quantizer(P, K)
-        >>> sys.type == nqlib.ConnectionType.FB_WITH_OUTPUT_QUANTIZER
-        True
+        >>> sys.is_stable
+        False
         """
         if P.m != K.m:
             raise ValueError(
@@ -890,11 +897,11 @@ class System():
         -------
         >>> import nqlib
         >>> import numpy as np
-        >>> P = nqlib.Plant(np.eye(1), np.eye(1), np.eye(1), np.eye(1))
-        >>> K = nqlib.Controller(np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1))
+        >>> P = nqlib.Plant(0.5, 1, 1, 1)
+        >>> K = nqlib.Controller(0, 1, 1, 1, 1, 1)
         >>> sys = nqlib.System.from_FBIQ(P, K)
-        >>> sys.type == nqlib.ConnectionType.FB_WITH_INPUT_QUANTIZER
-        True
+        >>> sys.is_stable
+        False
         """
         return System.from_FB_connection_with_input_quantizer(P, K)
 
@@ -922,11 +929,11 @@ class System():
         -------
         >>> import nqlib
         >>> import numpy as np
-        >>> P = nqlib.Plant(np.eye(1), np.eye(1), np.eye(1), np.eye(1))
-        >>> K = nqlib.Controller(np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1))
+        >>> P = nqlib.Plant(0.5, 1, 1, 1)
+        >>> K = nqlib.Controller(0, 1, 1, 1, 1, 1)
         >>> sys = nqlib.System.from_FBOQ(P, K)
-        >>> sys.type == nqlib.ConnectionType.FB_WITH_OUTPUT_QUANTIZER
-        True
+        >>> sys.is_stable
+        False
         """
         return System.from_FB_connection_with_output_quantizer(P, K)
 
@@ -944,7 +951,7 @@ class System():
         -------
         >>> import nqlib
         >>> import numpy as np
-        >>> sys = nqlib.System(np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1))
+        >>> sys = nqlib.System(0.3, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5)
         >>> sys.is_stable
         True
         """
@@ -988,7 +995,24 @@ class System():
         Example
         -------
         >>> import nqlib
-        >>> raise NotImplementedError()
+        >>> import numpy as np
+        >>> G = nqlib.System(
+        ...     A=[[1.15, 0.05],
+        ...        [0.00, 0.99]],
+        ...     B1=[[1],
+        ...         [1]],
+        ...     B2=[[0.004],
+        ...         [0.099]],
+        ...     C1=[1., 0.], C2=[-15., -3.],
+        ...     D1=0, D2=0,
+        ... )
+        >>> q = nqlib.StaticQuantizer.mid_tread(d=2)
+        >>> Q, E = nqlib.DynamicQuantizer.design_AG(
+        ...     system=G,
+        ...     q=q,
+        ... )
+        >>> np.isclose(E, G.E(Q))
+        np.True_
         """
         steptime = validate_int_or_inf(
             steptime,
@@ -1082,9 +1106,22 @@ class System():
         -------
         >>> import nqlib
         >>> import numpy as np
-        >>> sys = nqlib.System(np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1))
-        >>> q = nqlib.StaticQuantizer.mid_tread(0.1)
-        >>> sys.is_stable_with_quantizer(q)
+        >>> G = nqlib.System(
+        ...     A=[[1.15, 0.05],
+        ...        [0.00, 0.99]],
+        ...     B1=[[1],
+        ...         [1]],
+        ...     B2=[[0.004],
+        ...         [0.099]],
+        ...     C1=[1., 0.], C2=[-15., -3.],
+        ...     D1=0, D2=0,
+        ... )
+        >>> q = nqlib.StaticQuantizer.mid_tread(d=2)
+        >>> Q, E = nqlib.DynamicQuantizer.design_AG(
+        ...     system=G,
+        ...     q=q,
+        ... )
+        >>> G.is_stable_with_quantizer(Q)
         True
         """
         if isinstance(Q, StaticQuantizer):
@@ -1115,9 +1152,22 @@ class System():
         -------
         >>> import nqlib
         >>> import numpy as np
-        >>> sys = nqlib.System(np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1))
-        >>> q = nqlib.StaticQuantizer.mid_tread(0.1)
-        >>> sys.is_stable_with(q)
+        >>> G = nqlib.System(
+        ...     A=[[1.15, 0.05],
+        ...        [0.00, 0.99]],
+        ...     B1=[[1],
+        ...         [1]],
+        ...     B2=[[0.004],
+        ...         [0.099]],
+        ...     C1=[1., 0.], C2=[-15., -3.],
+        ...     D1=0, D2=0,
+        ... )
+        >>> q = nqlib.StaticQuantizer.mid_tread(d=2)
+        >>> Q, E = nqlib.DynamicQuantizer.design_AG(
+        ...     system=G,
+        ...     q=q,
+        ... )
+        >>> G.is_stable_with(Q)
         True
         """
         return self.is_stable_with_quantizer(Q)

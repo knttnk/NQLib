@@ -1,6 +1,6 @@
 # packages required for building and testing the package
 pytest
+pytest-cov
 build
 twine
 setuptools
-distribute

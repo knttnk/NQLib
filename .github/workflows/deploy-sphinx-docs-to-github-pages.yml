@@ -24,7 +24,7 @@ jobs:
           conda install -c conda-forge control=0.10 slycot cvxpy numpy>=2.0 scipy>=1.10.1 -y
           pip install --editable .
           pip install sphinx
-      - name: Build | Build with Sphinx
+      - name: Build | Build with Sphinx  # TODO: WARNING: html_static_path entry '_static' does not exist
         run: |
           sphinx-build -M html _sphinx docs
       - name: Upload static files as artifact

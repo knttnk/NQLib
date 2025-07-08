@@ -801,14 +801,14 @@ class DynamicQuantizer():
 
         If this value is less than 0, the quantizer satisfies the stability
         and `gain_wv` constraints.
-        The less this value is, the better the quantizer (the less `system.E(Q)`).
+        The less this value is, the better the quantizer (i.e., the less `system.E(Q)`).
 
         Parameters
         ----------
         system : System
             The system for which the quantizer is being optimized. Must be stable and SISO.
         T : int or InfInt, optional
-            The number of time steps for calculating `gain_wv`.
+            The number of time steps for calculating `gain_wv` and `system.E(Q)`.
             `T` >= 1 (default: `infint`, which means until convergence).
         gain_wv : float, optional
             Upper limit for the w->v gain. `gain_wv` >= 0 (default: `np.inf`).
@@ -821,7 +821,7 @@ class DynamicQuantizer():
         float
             Objective value.
             If the value is less than 0, the quantizer satisfies the constraints.
-            Else, the value is `max(eig_max(A + B @ C) - 1, Q.gain_wv(T) - gain_wv)`.
+            Otherwise, the value is `max(eig_max(A + B @ C) - 1, Q.gain_wv(T) - gain_wv)`.
 
         Example
         -------
@@ -861,14 +861,20 @@ class DynamicQuantizer():
         max_v = _np.max(constraint_values)
         if max_v < 0:
             types = ["exp", "atan", "1.1", "100*1.1"]
+            E = self.cost(
+                system,
+                steptime=T,
+                # If T is infint, self.cost raises Error when _check* = False.
+                _check_stability=T is infint,
+            )
             if obj_type == types[0]:
-                return - _np.exp(- system.E(self))
+                return - _np.exp(- E)
             if obj_type == types[1]:
-                return _np.arctan(system.E(self)) - _np.pi / 2
+                return _np.arctan(E) - _np.pi / 2
             if obj_type == types[2]:
-                return - 1.1 ** (- system.E(self))
+                return - 1.1 ** (- E)
             if obj_type == types[3]:
-                return - 10000 * _np.exp(- 0.01 * system.E(self))
+                return - 10000 * _np.exp(- 0.01 * E)
             raise ValueError(
                 f"`obj_type` must be one of {types}, but got {obj_type}."
             )

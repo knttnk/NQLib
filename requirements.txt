@@ -1,6 +1,7 @@
 # packages required for building and testing the package
 pytest
 pytest-cov
+sphinx
 build
 twine
 setuptools

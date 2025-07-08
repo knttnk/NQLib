@@ -64,7 +64,6 @@ class StaticQuantizer():
     Example
     -------
     >>> import nqlib
-    >>> import numpy as np
     >>> q = nqlib.StaticQuantizer.mid_tread(0.1)
     >>> q([0.04, 0.16])
     array([0. , 0.2])
@@ -83,10 +82,10 @@ class StaticQuantizer():
         function : Callable[[NDArrayNum], NDArrayNum]
             Quantization function. Must be callable.
         delta : float
-            The maximum allowed quantization error. Declares that for any real vector `u`, max(|q(u)-u|) <= `delta`. `delta` > 0.
+            The maximum allowed quantization error. Declares that for any real vector `u`, max(abs(q(u)-u)) <= `delta`. `delta` > 0.
         error_on_excess : bool, optional
             If True, raise error when error exceeds `delta` (default: True).
-            i.e. whether to raise an error when max(|q(u)-u|) > `delta` becomes True.
+            i.e. whether to raise an error when max(abs(q(u)-u)) > `delta` becomes True.
 
         Raises
         ------
@@ -207,13 +206,13 @@ class StaticQuantizer():
         Parameters
         ----------
         d : float
-            Quantization step size. For a real vector u, max(|q(u)-u|) <= d/2. `delta` > 0.
+            Quantization step size. For a real vector u, max(abs(q(u)-u)) <= d/2. `delta` > 0.
         bit : int or InfInt, optional
             Number of bits. Must satisfy `bit` >= 1 (default: `infint`).
             That is, the returned function can take `2**n` values.
         error_on_excess : bool, optional
             If True, raise error when error exceeds `delta` (=d/2) (default: True).
-            i.e. whether to raise an error when max(|q(u)-u|) > `delta` becomes `True`.
+            i.e. whether to raise an error when max(abs(q(u)-u)) > `delta` becomes `True`.
             Basically, this error should not occur, but for numerical safety, set this to True.
 
         Returns
@@ -276,13 +275,13 @@ class StaticQuantizer():
         Parameters
         ----------
         d : float
-            Quantization step size. For a real vector u, max(|q(u)-u|) <= d/2. `delta` > 0.
+            Quantization step size. For a real vector u, max(abs(q(u)-u)) <= d/2. `delta` > 0.
         bit : int or InfInt, optional
             Number of bits. Must satisfy `bit` >= 1 (default: `infint`).
             That is, the returned function can take `2**n` values.
         error_on_excess : bool, optional
             If True, raise error when error exceeds `delta` (=d/2) (default: True).
-            i.e. whether to raise an error when max(|q(u)-u|) > `delta` becomes `True`.
+            i.e. whether to raise an error when max(abs(q(u)-u)) > `delta` becomes `True`.
             Basically, this error should not occur, but for numerical safety, set this to True.
 
         Returns
@@ -567,26 +566,11 @@ class DynamicQuantizer():
     """
     Dynamic quantizer.
 
-    Parameters
-    ----------
-    A : NDArrayNum
-        State matrix (N x N, real or complex). N >= 1.
-    B : NDArrayNum
-        Input matrix (N x m, real or complex). m >= 1.
-    C : NDArrayNum
-        Output matrix (m x N, real or complex).
-    q : StaticQuantizer
-        Static quantizer instance.
-
     Example
     -------
     >>> import nqlib
     >>> q = nqlib.StaticQuantizer.mid_tread(1.0)
-    >>> import numpy as np
-    >>> A = np.array([[0.6]])
-    >>> B = np.array([[1.0]])
-    >>> C = np.array([[1.0]])
-    >>> Q = nqlib.DynamicQuantizer(A, B, C, q)
+    >>> Q = nqlib.DynamicQuantizer(0.6, 1, 1, q)
     >>> Q.quantize([0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4])
     array([[ 0.,  0.,  0.,  0.,  0., -1., -2., -3.]])
     """
@@ -620,11 +604,7 @@ class DynamicQuantizer():
         -------
         >>> import nqlib
         >>> q = nqlib.StaticQuantizer.mid_tread(1.0)
-        >>> import numpy as np
-        >>> A = np.array([[0.6]])
-        >>> B = np.array([[1.0]])
-        >>> C = np.array([[1.0]])
-        >>> Q = nqlib.DynamicQuantizer(A, B, C, q)
+        >>> Q = nqlib.DynamicQuantizer(0.6, 1.0, 1.0, q)
         >>> Q.quantize([0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6])
         array([[1., 1., 1., 1., 1., 2., 3.]])
         """
@@ -764,15 +744,14 @@ class DynamicQuantizer():
 
         References
         ----------
-        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
-           quantizers for discrete-valued input control;IEEE Transactions
-           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
+        [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
+        quantizers for discrete-valued input control;IEEE Transactions
+        on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
 
         Example
         -------
         >>> import nqlib
         >>> q = nqlib.StaticQuantizer.mid_tread(0.1)
-        >>> import numpy as np
         >>> dq = nqlib.DynamicQuantizer(0.5, 0.1, 0.1, q)
         >>> dq.gain_wv() < 1.021
         np.True_
@@ -837,10 +816,10 @@ class DynamicQuantizer():
 
         References
         ----------
-        .. [5] Y. Minami and T. Muromaki: Differential evolution-based
-           synthesis of dynamic quantizers with fixed-structures; International
-           Journal of Computational Intelligence and Applications, Vol. 15,
-           No. 2, 1650008 (2016)
+        [5] Y. Minami and T. Muromaki: Differential evolution-based
+        synthesis of dynamic quantizers with fixed-structures; International
+        Journal of Computational Intelligence and Applications, Vol. 15,
+        No. 2, 1650008 (2016)
         """
         T = validate_int_or_inf(
             T,
@@ -957,17 +936,16 @@ class DynamicQuantizer():
 
         References
         ----------
-        .. [2]  S. Azuma, Y. Minami and T. Sugie: Optimal dynamic quantizers
-           for feedback control with discrete-level actuators; Journal of 
-           Dynamic Systems, Measurement, and Control, Vol. 133, No. 2, 021005
-           (2011)
+        [2]  S. Azuma, Y. Minami and T. Sugie: Optimal dynamic quantizers
+        for feedback control with discrete-level actuators; Journal of 
+        Dynamic Systems, Measurement, and Control, Vol. 133, No. 2, 021005
+        (2011)
 
         Example
         -------
         >>> import nqlib
         >>> q = nqlib.StaticQuantizer.mid_tread(0.1)
-        >>> import numpy as np
-        >>> Q = nqlib.DynamicQuantizer(np.array([[0.5]]), np.array([[1.0]]), np.array([[1.0]]), q)
+        >>> Q = nqlib.DynamicQuantizer(0.5, 1.0, 1.0, q)
         >>> Q.is_stable
         False
         """
@@ -990,7 +968,6 @@ class DynamicQuantizer():
         -------
         >>> import nqlib
         >>> q = nqlib.StaticQuantizer.mid_tread(0.1)
-        >>> import numpy as np
         >>> Q = nqlib.DynamicQuantizer(1, 1, 1, q)
         >>> Q2 = Q.minreal
         >>> Q2.N
@@ -1068,7 +1045,6 @@ class DynamicQuantizer():
         Example
         -------
         >>> import nqlib
-        >>> import numpy as np
         >>> P = nqlib.Plant(
         ...     A =[[ 1.8, 0.8],
         ...         [-1.0, 0. ]],
@@ -1261,7 +1237,6 @@ class DynamicQuantizer():
         Example
         -------
         >>> import nqlib
-        >>> import numpy as np
         >>> P = nqlib.Plant(
         ...     A =[[ 1.8, 0.8],
         ...         [-1.0, 0. ]],
@@ -1397,15 +1372,14 @@ class DynamicQuantizer():
 
         References
         ----------
-        .. [4] R. Morita, S. Azuma, Y. Minami and T. Sugie: Graphical design
-           software for dynamic quantizers in control systems; SICE Journal 
-           of Control, Measurement, and System Integration, Vol. 4, No. 5, 
-           pp. 372-379 (2011)
+        [4] R. Morita, S. Azuma, Y. Minami and T. Sugie: Graphical design
+        software for dynamic quantizers in control systems; SICE Journal 
+        of Control, Measurement, and System Integration, Vol. 4, No. 5, 
+        pp. 372-379 (2011)
 
         Example
         -------
         >>> import nqlib
-        >>> import numpy as np
         >>> P = nqlib.Plant(
         ...     A =[[ 1.8, 0.8],
         ...         [-1.0, 0. ]],
@@ -1680,15 +1654,14 @@ class DynamicQuantizer():
 
         References
         ----------
-        .. [5] Y. Minami and T. Muromaki: Differential evolution-based
-           synthesis of dynamic quantizers with fixed-structures; International
-           Journal of Computational Intelligence and Applications, Vol. 15,
-           No. 2, 1650008 (2016)
+        [5] Y. Minami and T. Muromaki: Differential evolution-based
+        synthesis of dynamic quantizers with fixed-structures; International
+        Journal of Computational Intelligence and Applications, Vol. 15,
+        No. 2, 1650008 (2016)
 
         Example
         -------
         >>> import nqlib
-        >>> import numpy as np
         >>> G = nqlib.System(
         ...     A=[[1.15, 0.05],
         ...        [0.00, 0.99]],
@@ -1839,15 +1812,14 @@ class DynamicQuantizer():
 
         References
         ----------
-        .. [5] Y. Minami and T. Muromaki: Differential evolution-based
-           synthesis of dynamic quantizers with fixed-structures; International
-           Journal of Computational Intelligence and Applications, Vol. 15,
-           No. 2, 1650008 (2016)
+        [5] Y. Minami and T. Muromaki: Differential evolution-based
+        synthesis of dynamic quantizers with fixed-structures; International
+        Journal of Computational Intelligence and Applications, Vol. 15,
+        No. 2, 1650008 (2016)
 
         Example
         -------
         >>> import nqlib
-        >>> import numpy as np
         >>> G = nqlib.System(
         ...     A=[[1.15, 0.05],
         ...        [0.00, 0.99]],
@@ -1974,7 +1946,6 @@ class DynamicQuantizer():
         -------
         >>> import nqlib
         >>> q = nqlib.StaticQuantizer.mid_tread(0.3)
-        >>> import numpy as np
         >>> Q = nqlib.DynamicQuantizer(1, 1, 1, q)
         >>> Q.quantize([[0.2, 0.4]])
         array([[0.3, 0.6]])
@@ -2015,9 +1986,9 @@ class DynamicQuantizer():
 
         References
         ----------
-        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
-           quantizers for discrete-valued input control;IEEE Transactions
-           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
+        [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
+        quantizers for discrete-valued input control;IEEE Transactions
+        on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
 
         Example
         -------
@@ -2066,7 +2037,6 @@ class DynamicQuantizer():
         -------
         >>> import nqlib
         >>> q = nqlib.StaticQuantizer.mid_tread(0.1)
-        >>> import numpy as np
         >>> Q = nqlib.DynamicQuantizer(1, 1, 1, q)
         >>> Q.spec(show=False)
         'The specs of ...'

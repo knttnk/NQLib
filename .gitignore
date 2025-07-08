@@ -9,6 +9,7 @@ online-documentation
 article
 manual_tests
 .pytest_cache
+docs
 
 # キャッシュ
 __pycache__

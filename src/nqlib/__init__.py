@@ -2,8 +2,8 @@
 NQLib
 =====
 
-NQLib is a <a href="https://www.python.org/" target="_blank">Python</a>
-library to design noise shaping quantizer for discrete-valued input control.
+NQLib is a Python library to design noise shaping quantizer for
+discrete-valued input control.
 
 ## What can I do with NQLib?
 
@@ -15,10 +15,8 @@ input with a quantizer designed by NQLib.
 
 ## Example
 
-See
-<a href="https://colab.research.google.com/drive/1Ui-XqaTZCjwqRXC3ZeMeMCbPqGxK9YXO" target="_blank">
-example (Google Colab)
-</a>.
+See example (Google Colab).
+https://colab.research.google.com/drive/1Ui-XqaTZCjwqRXC3ZeMeMCbPqGxK9YXO
 
 ## Install
 
@@ -36,10 +34,11 @@ conda install -c conda-forge nqlib
 
 ## References
 
-NQLib is a Python library version of
-<a href="https://github.com/rmorita-jp/odqtoolbox" target="_blank">ODQ Toolbox</a>,
-which were developed in
-<a href="https://www.mathworks.com/products/matlab.html" target="_blank">MATLAB</a>.
+NQLib is a Python library version of ODQ Toolbox, 
+which were developed in MATLAB.
+
+- https://github.com/rmorita-jp/odqtoolbox
+- https://www.mathworks.com/products/matlab.html
 
 The algorithms used in NQLib are based on the following paper.
 
@@ -62,7 +61,7 @@ The algorithms used in NQLib are based on the following paper.
 
 This software is released under the MIT License, see LICENSE.txt.
 """
-
+from __future__ import annotations
 
 from .types import infint
 from .system_description import Controller, Plant, System

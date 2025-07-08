@@ -51,19 +51,23 @@ class Controller(object):
 
     References
     ----------
-    .. [5] Y. Minami and T. Muromaki: Differential evolution-based
-        synthesis of dynamic quantizers with fixed-structures; International
-        Journal of Computational Intelligence and Applications, Vol. 15,
-        No. 2, 1650008 (2016)
+    [5] Y. Minami and T. Muromaki: Differential evolution-based
+    synthesis of dynamic quantizers with fixed-structures; International
+    Journal of Computational Intelligence and Applications, Vol. 15,
+    No. 2, 1650008 (2016)
 
     Example
     -------
     >>> import nqlib
-    >>> import numpy as np
-    >>> K = nqlib.Controller(np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1))
+    >>> K = nqlib.Controller(A=0,
+    ...                      B1=0,
+    ...                      B2=[0, 0],
+    ...                      C=0,
+    ...                      D1=1,
+    ...                      D2=[-20, -3])
     >>> K.A
-    array([[1.]])
-    """
+    array([[0]])
+    """        
 
     def __init__(self, A: ArrayLike, B1: ArrayLike, B2: ArrayLike, C: ArrayLike, D1: ArrayLike, D2: ArrayLike):
         """
@@ -94,10 +98,14 @@ class Controller(object):
         Example
         -------
         >>> import nqlib
-        >>> import numpy as np
-        >>> K = nqlib.Controller(np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1))
+        >>> K = nqlib.Controller(A=0,
+        ...                      B1=0,
+        ...                      B2=[0, 0],
+        ...                      C=0,
+        ...                      D1=1,
+        ...                      D2=[-20, -3])
         >>> K.B1
-        array([[1.]])
+        array([[0]])
         """
         try:
             A_mat = matrix(A)
@@ -189,9 +197,15 @@ class Plant(object):
     -------
     >>> import nqlib
     >>> import numpy as np
-    >>> P = nqlib.Plant(np.eye(1), np.eye(1), np.eye(1), np.eye(1))
+    >>> P = nqlib.Plant(A=[[1.15, 0.05],
+    ...                    [0, 0.99]],
+    ...                 B=[[0.004],
+    ...                    [0.099]],
+    ...                 C1=[1, 0],
+    ...                 C2=np.eye(2))
     >>> P.A
-    array([[1.]])
+    array([[1.15, 0.05],
+           [0.  , 0.99]])
     """
 
     def __init__(self, A: ArrayLike, B: ArrayLike, C1: ArrayLike, C2: ArrayLike):
@@ -218,18 +232,24 @@ class Plant(object):
 
         References
         ----------
-        .. [5] Y. Minami and T. Muromaki: Differential evolution-based
-           synthesis of dynamic quantizers with fixed-structures; International
-           Journal of Computational Intelligence and Applications, Vol. 15,
-           No. 2, 1650008 (2016)
+        [5] Y. Minami and T. Muromaki: Differential evolution-based
+        synthesis of dynamic quantizers with fixed-structures; International
+        Journal of Computational Intelligence and Applications, Vol. 15,
+        No. 2, 1650008 (2016)
 
         Example
         -------
         >>> import nqlib
         >>> import numpy as np
-        >>> P = nqlib.Plant(np.eye(1), np.eye(1), np.eye(1), np.eye(1))
-        >>> P.B
-        array([[1.]])
+        >>> P = nqlib.Plant(A=[[1.15, 0.05],
+        ...                    [0, 0.99]],
+        ...                 B=[[0.004],
+        ...                    [0.099]],
+        ...                 C1=[1, 0],
+        ...                 C2=np.eye(2))
+        >>> P.A
+        array([[1.15, 0.05],
+               [0.  , 0.99]])
         """
         try:
             A_mat = matrix(A)
@@ -340,10 +360,21 @@ class System():
     Example
     -------
     >>> import nqlib
-    >>> import numpy as np
-    >>> sys = nqlib.System(np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1))
-    >>> sys.A
-    array([[1.]])
+    >>> G = nqlib.System(
+    ...     A=[[1.15, 0.05],
+    ...        [0.00, 0.99]],
+    ...     B1=[[0.],
+    ...         [0.]],
+    ...     B2=[[0.004],
+    ...         [0.099]],
+    ...     C1=[1., 0.],
+    ...     C2=[-15., -3.],
+    ...     D1=0,
+    ...     D2=1,
+    ... )
+    >>> G.A
+    array([[1.15, 0.05],
+           [0.  , 0.99]])
     """
 
     def __str__(self) -> str:
@@ -422,15 +453,15 @@ class System():
 
         References
         ----------
-        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
-           quantizers for discrete-valued input control;IEEE Transactions
-           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
+        [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
+        quantizers for discrete-valued input control;IEEE Transactions
+        on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
 
         Example
         -------
         >>> import nqlib
         >>> import numpy as np
-        >>> sys = nqlib.System(np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1))
+        >>> sys = nqlib.System(1, 1, 1, 1, 1, 1, 1)
         >>> q = nqlib.StaticQuantizer.mid_tread(0.1)
         >>> t, u, v, z = sys.response_with_quantizer(q, np.ones((1, 5)), np.zeros((1, 1)))
         >>> t.shape
@@ -489,15 +520,15 @@ class System():
 
         References
         ----------
-        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
-           quantizers for discrete-valued input control;IEEE Transactions
-           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
+        [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
+        quantizers for discrete-valued input control;IEEE Transactions
+        on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
 
         Example
         -------
         >>> import nqlib
         >>> import numpy as np
-        >>> sys = nqlib.System(np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1))
+        >>> sys = nqlib.System(1, 1, 1, 1, 1, 1, 1)
         >>> t, u, z = sys.response(np.ones((1, 5)), np.zeros((1, 1)))
         >>> t.shape
         (1, 5)
@@ -552,17 +583,28 @@ class System():
 
         References
         ----------
-        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
-           quantizers for discrete-valued input control;IEEE Transactions
-           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
+        [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
+        quantizers for discrete-valued input control;IEEE Transactions
+        on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
 
         Example
         -------
         >>> import nqlib
-        >>> import numpy as np
-        >>> sys = nqlib.System(np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1), np.eye(1))
-        >>> sys.B1
-        array([[1.]])
+        >>> G = nqlib.System(
+        ...     A=[[1.15, 0.05],
+        ...        [0.00, 0.99]],
+        ...     B1=[[0.],
+        ...         [0.]],
+        ...     B2=[[0.004],
+        ...         [0.099]],
+        ...     C1=[1., 0.],
+        ...     C2=[-15., -3.],
+        ...     D1=0,
+        ...     D2=1,
+        ... )
+        >>> G.A
+        array([[1.15, 0.05],
+               [0.  , 0.99]])
         """
         try:
             A_mat = matrix(A)
@@ -665,14 +707,13 @@ class System():
 
         References
         ----------
-        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
-           quantizers for discrete-valued input control;IEEE Transactions
-           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
+        [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
+        quantizers for discrete-valued input control;IEEE Transactions
+        on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
 
         Example
         -------
         >>> import nqlib
-        >>> import numpy as np
         >>> P = nqlib.Plant(
         ...     A =[[ 1.8, 0.8],
         ...         [-1.0, 0. ]],
@@ -736,14 +777,13 @@ class System():
 
         References
         ----------
-        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
-           quantizers for discrete-valued input control;IEEE Transactions
-           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
+        [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
+        quantizers for discrete-valued input control;IEEE Transactions
+        on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
 
         Example
         -------
         >>> import nqlib
-        >>> import numpy as np
         >>> P = nqlib.Plant(0.5, 1, 1, 1)
         >>> K = nqlib.Controller(0, 1, 1, 1, 1, 1)
         >>> sys = nqlib.System.from_FB_connection_with_input_quantizer(P, K)
@@ -818,14 +858,13 @@ class System():
 
         References
         ----------
-        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
-           quantizers for discrete-valued input control;IEEE Transactions
-           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
+        [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
+        quantizers for discrete-valued input control;IEEE Transactions
+        on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
 
         Example
         -------
         >>> import nqlib
-        >>> import numpy as np
         >>> P = nqlib.Plant(0.5, 1, 1, 1)
         >>> K = nqlib.Controller(0, 1, 1, 1, 1, 1)
         >>> sys = nqlib.System.from_FB_connection_with_output_quantizer(P, K)
@@ -896,7 +935,6 @@ class System():
         Example
         -------
         >>> import nqlib
-        >>> import numpy as np
         >>> P = nqlib.Plant(0.5, 1, 1, 1)
         >>> K = nqlib.Controller(0, 1, 1, 1, 1, 1)
         >>> sys = nqlib.System.from_FBIQ(P, K)
@@ -928,7 +966,6 @@ class System():
         Example
         -------
         >>> import nqlib
-        >>> import numpy as np
         >>> P = nqlib.Plant(0.5, 1, 1, 1)
         >>> K = nqlib.Controller(0, 1, 1, 1, 1, 1)
         >>> sys = nqlib.System.from_FBOQ(P, K)
@@ -950,7 +987,6 @@ class System():
         Example
         -------
         >>> import nqlib
-        >>> import numpy as np
         >>> sys = nqlib.System(0.3, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5)
         >>> sys.is_stable
         True
@@ -988,9 +1024,9 @@ class System():
 
         References
         ----------
-        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
-           quantizers for discrete-valued input control;IEEE Transactions
-           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
+        [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
+        quantizers for discrete-valued input control;IEEE Transactions
+        on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
 
         Example
         -------
@@ -1098,14 +1134,13 @@ class System():
 
         References
         ----------
-        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
-           quantizers for discrete-valued input control;IEEE Transactions
-           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
+        [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
+        quantizers for discrete-valued input control;IEEE Transactions
+        on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
 
         Example
         -------
         >>> import nqlib
-        >>> import numpy as np
         >>> G = nqlib.System(
         ...     A=[[1.15, 0.05],
         ...        [0.00, 0.99]],
@@ -1144,14 +1179,13 @@ class System():
 
         References
         ----------
-        .. [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
-           quantizers for discrete-valued input control;IEEE Transactions
-           on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
+        [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
+        quantizers for discrete-valued input control;IEEE Transactions
+        on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
 
         Example
         -------
         >>> import nqlib
-        >>> import numpy as np
         >>> G = nqlib.System(
         ...     A=[[1.15, 0.05],
         ...        [0.00, 0.99]],

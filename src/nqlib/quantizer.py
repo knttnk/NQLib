@@ -1049,17 +1049,18 @@ class DynamicQuantizer():
         the coefficients.
 
         The form of the parameters is as follows:
-        ```
-        a = parameters[:N]
-        c = parameters[N:]
-        A = [[      0,      1,      0,    ...,      0]
-             [      0,      0,      1,    ...,      0]
-                                             :
-             [      0,      0,      0,    ...,      1]
-             [  -a[0],  -a[1],  -a[2],    ..., -a[N-1]]
-        B =  [    [0],    [0],    [0],    ...,    [1]]
-        C =  [   c[0],   c[1],   c[2],    ...,  c[N-1]]
-        ```
+
+        ..  code-block:: none
+
+            | a = parameters[:N]
+            | c = parameters[N:]
+            | A = [[      0,      1,      0,    ...,      0]
+            |      [      0,      0,      1,    ...,      0]
+            |                                      :
+            |      [      0,      0,      0,    ...,      1]
+            |      [  -a[0],  -a[1],  -a[2],    ..., -a[N-1]]
+            | B =  [    [0],    [0],    [0],    ...,    [1]]
+            | C =  [   c[0],   c[1],   c[2],    ...,  c[N-1]]
 
         Parameters
         ----------
@@ -1116,16 +1117,17 @@ class DynamicQuantizer():
         This quantizer must be SISO.
 
         The form of the parameters is as follows:
-        ```
-        A = [[      0,      1,      0,    ...,      0]
-             [      0,      0,      1,    ...,      0]
-                                             :
-             [      0,      0,      0,    ...,      1]
-             [  -a[0],  -a[1],  -a[2],    ...,-a[N-1]]]
-        B =  [    [0],    [0],    [0],    ...,    [1]]
-        C =  [   c[0],   c[1],   c[2],    ...,  c[N-1]]
-        parameters = [*a, *c]
-        ```
+        
+        ..  code-block:: none
+
+            | A = [[      0,      1,      0,    ...,      0]
+            |      [      0,      0,      1,    ...,      0]
+            |                                      :
+            |      [      0,      0,      0,    ...,      1]
+            |      [  -a[0],  -a[1],  -a[2],    ...,-a[N-1]]]
+            | B =  [    [0],    [0],    [0],    ...,    [1]]
+            | C =  [   c[0],   c[1],   c[2],    ...,  c[N-1]]
+            | parameters = [*a, *c]
 
         Parameters
         ----------
@@ -1611,14 +1613,16 @@ class DynamicQuantizer():
             _np.ndarray
 
             Solution of LP. Form of
-            ```
-            _np.array([
-                [H_20],
-                [H_21],
-                :
-                [H_2(T-2)],
-            ])
-            ```
+
+            ..  code-block:: python
+
+                _np.array([
+                    [H_20],
+                    [H_21],
+                    :
+                    [H_2(T-2)],
+                ])
+
             So, the shape is `(m*(T-1), m)`.
 
             Raises

@@ -688,12 +688,12 @@ class System():
 
         'from_FF' means that a quantizer is inserted as shown in the
         following figure.
-        
-        ```
-        >       ┌─────┐  v  ┌─────┐
-        > u ───>│  Q  ├────>│  P  ├───> z
-        >       └─────┘     └─────┘
-        ```
+
+        ..  code-block:: none
+
+            |       ┌─────┐  v  ┌─────┐
+            | u ───>│  Q  ├────>│  P  ├───> z
+            |       └─────┘     └─────┘
 
         Parameters
         ----------
@@ -753,15 +753,15 @@ class System():
 
         'from_FB_connection_with_input_quantizer' means that a
         quantizer is inserted as shown in the following figure.
+        
+        ..  code-block:: none
 
-        ```
-        >       ┌───────┐     ┌───────┐     ┌───────┐       
-        > r ───>│       │  u  │       │  v  │       ├───> z 
-        >       │   K   ├────>│   Q   ├────>│   P   │       
-        >    ┌─>│       │     │       │     │       ├──┐    
-        >    │  └───────┘     └───────┘     └───────┘  │ y  
-        >    └─────────────────────────────────────────┘    
-        ```
+            |       ┌───────┐     ┌───────┐     ┌───────┐       
+            | r ───>│       │  u  │       │  v  │       ├───> z 
+            |       │   K   ├────>│   Q   ├────>│   P   │       
+            |    ┌─>│       │     │       │     │       ├──┐    
+            |    │  └───────┘     └───────┘     └───────┘  │ y  
+            |    └─────────────────────────────────────────┘    
 
         Parameters
         ----------
@@ -834,15 +834,15 @@ class System():
         'from_FB_connection_with_output_quantizer' means that a
         quantizer is inserted as shown in the following figure.
 
-        ```
-        >       ┌───────┐           ┌───────┐       
-        > r ───>│       │           │       ├───> z 
-        >       │   K   ├──────────>│   P   │       
-        >    ┌─>│       │           │       ├──┐    
-        >  v │  └───────┘  ┌─────┐  └───────┘  │ u  
-        >    └─────────────┤  Q  │<────────────┘    
-        >                  └─────┘
-        ```
+        ..  code-block:: none
+
+            |       ┌───────┐           ┌───────┐       
+            | r ───>│       │           │       ├───> z 
+            |       │   K   ├──────────>│   P   │       
+            |    ┌─>│       │           │       ├──┐    
+            |  v │  └───────┘  ┌─────┐  └───────┘  │ u  
+            |    └─────────────┤  Q  │<────────────┘    
+            |                  └─────┘
 
         Parameters
         ----------

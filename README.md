@@ -8,10 +8,6 @@ NQLib is a <a href="https://www.python.org/" target="_blank">Python</a> library 
 
 In the real world, a dynamic system may have to be controlled by discrete-valued signals due to the inclusion of actuators that are driven by ON/OFF or network with capacity limitations. In such a case, a good output may be obtained by converting continuous-valued input to discrete-valued input with a quantizer designed by NQLib.
 
-## Example
-
-See <a href="https://colab.research.google.com/drive/1Ui-XqaTZCjwqRXC3ZeMeMCbPqGxK9YXO" target="_blank">example (Google Colab)</a>.
-
 ## Install
 
 You can install NQLib by using pip
@@ -25,6 +21,12 @@ or conda.
 ```sh
 conda install -c conda-forge nqlib
 ```
+
+## Documentation
+
+All the documentation is available at <a href="https://knttnk.github.io/NQLib/" target="_blank">NQLib documentation page</a>.
+
+Examples of usage are available at <a href="https://colab.research.google.com/drive/1Ui-XqaTZCjwqRXC3ZeMeMCbPqGxK9YXO" target="_blank">example (Google Colab)</a>.
 
 ## References
 

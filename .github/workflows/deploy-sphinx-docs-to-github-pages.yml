@@ -12,9 +12,6 @@ jobs:
   build-with-sphinx:
     runs-on: ubuntu-latest
     name: Sphinx docs to gh-pages
-    # permissions:
-    #   pages: write
-    #   id-token: write
     steps:
       - uses: actions/checkout@v4
       - name: Build | Make conda environment
@@ -25,6 +22,7 @@ jobs:
       - name: Build | Install dependencies
         run: |
           conda install -c conda-forge control=0.10 slycot cvxpy numpy>=2.0 scipy>=1.10.1 -y
+          pip install --editable .
           pip install sphinx
       - name: Build | Build with Sphinx
         run: |
@@ -33,7 +31,7 @@ jobs:
         id: deployment
         uses: actions/upload-pages-artifact@v3
         with:
-          path: docs/
+          path: docs/html
   # Deploy job
   deploy:
     needs: build-with-sphinx

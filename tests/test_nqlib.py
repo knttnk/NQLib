@@ -4,6 +4,7 @@ import numpy
 import random
 rand = random.random
 
+
 class NQLibTest(unittest.TestCase):
     def test_cost(self):
         import nqlib
@@ -274,6 +275,31 @@ class NQLibTest(unittest.TestCase):
                 D2=numpy.random.randn(*D_shape),
             )
 
+    def test_dynamic_quantizer_parameters(self):
+        import nqlib
+        for length in range(1, 50):
+            parameters = numpy.random.randn(length * 2) * 10
+            q = nqlib.StaticQuantizer.mid_tread(1)
+            Q = nqlib.DynamicQuantizer.from_SISO_parameters(
+                parameters,
+                q=q,
+            )
+            Q_parameters = Q.to_parameters()
+            self.assertTrue(
+                all(
+                    numpy.isclose(
+                        Q_parameters,
+                        parameters,
+                        rtol=1e-12,
+                        atol=1e-12,
+                    ),
+                ),
+                msg=(
+                    f"Q.to_parameters() = {Q_parameters}, "
+                    f"parameters = {parameters}"
+                ),
+            )
+
     def test_AG_serial_decomposition(self):
         import nqlib
         z = control.tf('z')
@@ -518,6 +544,65 @@ class NQLibTest(unittest.TestCase):
                 f"system:\n"
                 f"{ideal_system}"
             ),
+        )
+
+    def test_user_optimization(self):
+        import nqlib
+        from scipy.optimize import minimize
+        P = nqlib.Plant(A=[[0.95, -0.37],
+                        [0.25, 0.95]],
+                        B=[[0.37],
+                        [0.05]],
+                        C1=[0, 1],
+                        C2=numpy.eye(2))
+        K = nqlib.Controller(A=1,
+                             B1=1,
+                             B2=[0, -1],
+                             C=0.31,
+                             D1=0,
+                             D2=[-0.94, -0.66])
+        G = nqlib.System.from_FBIQ(P, K)
+        q = nqlib.StaticQuantizer.mid_tread(d=1)
+
+        Q_odq, _ = nqlib.DynamicQuantizer.design_AG(
+            G,
+            q=q, allow_unstable=True,
+        )
+        if Q_odq is None:
+            self.fail("Q_odq is None, design failed")
+
+        def obj(x):
+            Q = nqlib.DynamicQuantizer.from_SISO_parameters(x, q=q)
+            return Q.objective_function(
+                G,
+                T=100,
+                gain_wv=2,
+                # obj_type="exp",
+            )
+        optimization_result = minimize(
+            obj,
+            Q_odq.to_parameters(),
+            method="Nelder-Mead",
+            options={
+                "xatol": 1e-8,
+                "disp": True,
+                'maxiter': 10000,
+            },
+        )
+        if not optimization_result.success:
+            self.fail(f"Optimization failed: {optimization_result.message}")
+        Q = nqlib.DynamicQuantizer.from_SISO_parameters(
+            optimization_result.x,
+            q=q,
+        )
+        self.assertTrue(
+            Q.is_stable,
+            msg="Q is unstable, optimization failed."
+        )
+        E = G.E(Q)
+        self.assertTrue(
+            E < numpy.inf,
+            msg="E is infinite, optimization failed or system is unstable."
         )
 
 

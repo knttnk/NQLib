@@ -4,6 +4,8 @@ import warnings
 from enum import Enum as _Enum
 from enum import auto as _auto
 from typing import Callable, Tuple, Union, List
+import dataclasses
+import functools
 
 import control as _ctrl
 from packaging.version import Version
@@ -84,7 +86,7 @@ class StaticQuantizer():
         delta : float
             The maximum allowed quantization error. Declares that for any real vector `u`, max(abs(q(u)-u)) <= `delta`. `delta` > 0.
         error_on_excess : bool, optional
-            If True, raise error when error exceeds `delta` (default: True).
+            If True, raises error when error exceeds `delta` (default: True).
             i.e. whether to raise an error when max(abs(q(u)-u)) > `delta` becomes True.
 
         Raises
@@ -786,33 +788,51 @@ class DynamicQuantizer():
 
             return ret  # type: ignore
 
-    def _objective_function(
+    def objective_function(
         self,
-            system: "System",  # type: ignore
-            *,
-            T: int | InfInt = infint,  # TODO: これより下を反映
-            gain_wv: Real = _np.inf,  # type: ignore
-            obj_type: str = ["exp", "atan", "1.1", "100*1.1"][0],
+        system: "System",  # type: ignore
+        *,
+        T: int | InfInt = infint,
+        gain_wv: Real = _np.inf,  # type: ignore
+        obj_type: str = ["exp", "atan", "1.1", "100*1.1"][0],
     ) -> Real:
         """
-        Objective function for numerical optimization.
+        Objective function designed for numerical optimization.
+
+        If this value is less than 0, the quantizer satisfies the stability
+        and `gain_wv` constraints.
+        The less this value is, the better the quantizer (the less `system.E(Q)`).
 
         Parameters
         ----------
         system : System
             The system for which the quantizer is being optimized. Must be stable and SISO.
         T : int or InfInt, optional
-            The number of time steps for estimation.
+            The number of time steps for calculating `gain_wv`.
             `T` >= 1 (default: `infint`, which means until convergence).
         gain_wv : float, optional
             Upper limit for the w->v gain. `gain_wv` >= 0 (default: `np.inf`).
         obj_type : str, optional
-            Objective function type. Must be one of ['exp', 'atan', '1.1', '100*1.1'] (default: 'exp').
+            Objective function type. Must be one of ['exp', 'atan', '1.1', '100*1.1']
+            (default: 'exp').
 
         Returns
         -------
         float
             Objective value.
+            If the value is less than 0, the quantizer satisfies the constraints.
+            Else, the value is `max(eig_max(A + B @ C) - 1, Q.gain_wv(T) - gain_wv)`.
+
+        Example
+        -------
+        >>> import nqlib
+        >>> q = nqlib.StaticQuantizer.mid_tread(0.1)
+        >>> Q = nqlib.DynamicQuantizer(1, 0.1, 0.1, q)
+        >>> Q.is_stable
+        False
+        >>> system = nqlib.System(0, 0, 0, 0, 0, 0, 0)
+        >>> Q.objective_function(system, T=10, gain_wv=1.0, obj_type="exp") > 0  # because unstable
+        np.True_
 
         References
         ----------
@@ -857,7 +877,7 @@ class DynamicQuantizer():
 
     def order_reduced(self, dim: int) -> "DynamicQuantizer":
         """
-        Return a reduced-order quantizer.
+        Returns a reduced-order quantizer.
 
         Parameters
         ----------
@@ -973,11 +993,11 @@ class DynamicQuantizer():
         >>> Q2.N
         1
         """
-        minreal_ss: _ctrl.StateSpace = _ctrl.ss(
+        minreal_ss: _ctrl.StateSpace = _ctrl.StateSpace(
             self.A,
             self.B,
             self.C,
-            self.C @ self.B * 0,
+            0,
             True,
         ).minreal()  # type: ignore
         return DynamicQuantizer(
@@ -986,6 +1006,134 @@ class DynamicQuantizer():
             minreal_ss.C,  # type: ignore
             self.q,
         )
+
+    @staticmethod
+    def from_SISO_parameters(
+        parameters: NDArrayNum,
+        *,
+        q: StaticQuantizer,
+    ) -> "DynamicQuantizer":
+        """
+        Create an SISO dynamic quantizer from parameters.
+        Resulting dynamic quantizer is in a reachable canonical form
+        from a 1D array of parameters, which is a concatenation of
+        the coefficients.
+
+        Following is the form of the parameters:
+        ```
+        a = parameters[:N]
+        c = parameters[N:]
+        A = [[      0,      1,      0,    ...,      0]
+             [      0,      0,      1,    ...,      0]
+                                             :
+             [      0,      0,      0,    ...,      1]
+             [  -a[0],  -a[1],  -a[2],    ..., -a[N-1]]
+        B =  [    [0],    [0],    [0],    ...,    [1]]
+        C =  [   c[0],   c[1],   c[2],    ...,  c[N-1]]
+        ```
+
+        Parameters
+        ----------
+        parameters : NDArrayNum
+            1D array of parameters, concatenating a and c.
+        q : StaticQuantizer
+            Static quantizer that this dynamic quantizer uses.
+
+        Returns
+        -------
+        DynamicQuantizer
+            Dynamic quantizer created from the parameters.
+
+        Example
+        -------
+        >>> import nqlib
+        >>> q = nqlib.StaticQuantizer.mid_tread(0.1)
+        >>> Q = nqlib.DynamicQuantizer.from_SISO_parameters([1, 0.33], q=q)
+        >>> Q.A
+        array([[-1.]])
+        >>> Q.C
+        array([[0.33]])
+        """
+        if len(_np.shape(parameters)) != 1:
+            raise ValueError("`parameters` must be a 1D array or some iterable.")
+        _dim = len(parameters) / 2
+        if _dim != int(_dim):
+            raise ValueError("The length of `parameters` must be even.")
+        N = int(_dim)
+        a = _np.array(parameters[:N])
+        c = _np.array(parameters[N:])
+        _A = block([
+            [zeros((N - 1, 1)), eye(N - 1)],
+            [-a],
+        ])
+        _B = block([  # type: ignore
+            [zeros((N - 1, 1))],
+            [1],
+        ])
+        _C = c
+        return DynamicQuantizer(
+            A=_A,
+            B=_B,
+            C=_C,
+            q=q,
+        )
+
+    def to_parameters(self, *, minreal: bool = False) -> NDArrayNum:
+        """
+        Convert the dynamic quantizer to a 1D array of parameters.
+
+        Parameters here means the elements of A and C matrices of
+        a reachable canonical form.
+        This quantizer must be SISO.
+
+        Following is the form of the parameters:
+        ```
+        A = [[      0,      1,      0,    ...,      0]
+             [      0,      0,      1,    ...,      0]
+                                             :
+             [      0,      0,      0,    ...,      1]
+             [  -a[0],  -a[1],  -a[2],    ...,-a[N-1]]]
+        B =  [    [0],    [0],    [0],    ...,    [1]]
+        C =  [   c[0],   c[1],   c[2],    ...,  c[N-1]]
+        parameters = [*a, *c]
+        ```
+
+        Parameters
+        ----------
+        minreal : bool, optional
+            If True, return the parameters of the minimal
+            realization of this quantizer (default: False).
+
+        Returns
+        -------
+        parameters : NDArrayNum
+            1D array of parameters, concatenating a and c.
+
+        Example
+        -------
+        >>> import nqlib
+        >>> q = nqlib.StaticQuantizer.mid_tread(0.1)
+        >>> Q = nqlib.DynamicQuantizer(-1, 1, 0.33, q)
+        >>> Q.to_parameters()
+        array([1.  , 0.33])
+        """
+        if self.m != 1:
+            raise ValueError("A dynamic quantizer must be SISO to convert to parameters.")
+        tf = _ctrl.ss2tf(
+            _ctrl.StateSpace(self.A, self.B, self.C, 0, True),
+        )
+        if minreal:
+            tf = _ctrl.minreal(tf, verbose=False)
+        # define coefficients
+        _c = _np.flipud(tf.num[0][0]).ravel()  # [c_? * _a_N, ..., c_N-1 * _a_N, c_N * _a_N]
+        _a = _np.flipud(tf.den[0][0]).ravel()  # [a_0 * _a_N, ..., a_N-1 * _a_N, _a_N]
+        # normalize coefficients
+        a_N = _a[-1]
+        N = len(_a) - 1
+        a = _a[0:-1] / a_N
+        c = _np.zeros(N)
+        c[-len(_c):] = _c / a_N
+        return _np.concatenate([a, c])
 
     @staticmethod
     def design(
@@ -1685,43 +1833,13 @@ class DynamicQuantizer():
         )
         # TODO: check if system is SISO
 
-        # functions to calculate E from
-        # x = [an, ..., a1, cn, ..., c1]  (n = dim)
-        def a(x: NDArrayNum) -> NDArrayNum:
-            """
-            a = [an, ..., a1]
-            """
-            return x[:dim]
-
-        def c(x: NDArrayNum) -> NDArrayNum:
-            """
-            c = [cn, ..., c1]
-            """
-            return x[dim:]
-
-        def _Q(x: NDArrayNum) -> DynamicQuantizer:
-            # controllable canonical form
-            _A = block([
-                [zeros((dim - 1, 1)), eye(dim - 1)],
-                [-a(x)],
-            ])
-            _B = block([  # type: ignore
-                [zeros((dim - 1, 1))],
-                [1],
-            ])
-            _C = c(x)
-            return DynamicQuantizer(
-                A=_A,
-                B=_B,
-                C=_C,
-                q=q,
-            )
-
         def obj(x: NDArrayNum) -> Real:
-            return _Q(x)._objective_function(system,
-                                             T=T,
-                                             gain_wv=gain_wv,  # type: ignore
-                                             obj_type=obj_type)
+            return DynamicQuantizer.from_SISO_parameters(x, q=q).objective_function(
+                system,
+                T=T,
+                gain_wv=gain_wv,  # type: ignore
+                obj_type=obj_type,
+            )
 
         # optimize
         if verbose:
@@ -1747,7 +1865,7 @@ class DynamicQuantizer():
             print("### End of message from `scipy.optimize.minimize()`. ###")
 
         if result.success and obj(result.x) <= 0:
-            Q = _Q(result.x)
+            Q = DynamicQuantizer.from_SISO_parameters(result.x, q=q)
             E = system.E(Q)
             if verbose:
                 print("Optimization succeeded.")
@@ -1841,42 +1959,9 @@ class DynamicQuantizer():
             minimum=1,  # order must be greater than 0
             name="dim",
         )
-        # TODO: check if system is SISO
-
-        # functions to calculate E from
-        # x = [an, ..., a1, cn, ..., c1]  (n = dim)
-        def a(x: NDArrayNum) -> NDArrayNum:
-            """
-            a = [an, ..., a1]
-            """
-            return x[:dim]
-
-        def c(x: NDArrayNum) -> NDArrayNum:
-            """
-            c = [cn, ..., c1]
-            """
-            return x[dim:]
-
-        def _Q(x: NDArrayNum) -> DynamicQuantizer:
-            # controllable canonical form
-            _A = block([
-                [zeros((dim - 1, 1)), eye(dim - 1)],
-                [-a(x)],
-            ])
-            _B = block([  # type: ignore
-                [zeros((dim - 1, 1))],
-                [1],
-            ])
-            _C = c(x)
-            return DynamicQuantizer(
-                A=_A,
-                B=_B,
-                C=_C,
-                q=q,
-            )
 
         def obj(x: NDArrayNum) -> Real:
-            return _Q(x)._objective_function(
+            return DynamicQuantizer.from_SISO_parameters(x, q=q).objective_function(
                 system,
                 T=T,
                 gain_wv=gain_wv,  # type: ignore
@@ -1905,7 +1990,7 @@ class DynamicQuantizer():
             print("### End of message from `scipy.optimize.differential_evolution()`. ###")
 
         if result.success:
-            Q = _Q(result.x)
+            Q = DynamicQuantizer.from_SISO_parameters(result.x, q=q)
             E = system.E(Q)
             if verbose:
                 print("Optimization succeeded.")
@@ -2008,7 +2093,7 @@ class DynamicQuantizer():
              steptime: int | InfInt = infint,
              show: bool = True) -> str:
         """
-        Return a string summary of the quantizer's specification.
+        Returns a string summary of the quantizer's specification.
 
         Parameters
         ----------

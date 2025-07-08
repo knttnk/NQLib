@@ -1124,13 +1124,25 @@ class DynamicQuantizer():
             Q, E = DynamicQuantizer.design_AG(
                 system,
                 q=q,
-                dim=dim,
-                gain_wv=gain_wv,
                 verbose=verbose,
             )
-            _print_report(Q, "the analytical method")
             if Q is not None:
-                return Q, E
+                # Check specs before return
+                if Q.N > dim:
+                    if verbose:
+                        print(
+                            f"The order of the quantizer {Q.N} is greater than {dim}, the value you specified. ",
+                            "Try other methods.",
+                        )
+                elif (Q_gain_wv := Q.gain_wv()) > gain_wv:
+                    if verbose:
+                        print(
+                            f"The `gain_wv` of the quantizer {Q_gain_wv} is greater than {gain_wv}, the value you specified. ",
+                            "Try other methods.",
+                        )
+                else:
+                    _print_report(Q, "the analytical method")
+                    return Q, E
 
         candidates: List[Tuple[DynamicQuantizer, float]] = []
         # numerically optimize
@@ -1196,9 +1208,6 @@ class DynamicQuantizer():
     def design_AG(system: "System",  # type: ignore
                   *,
                   q: StaticQuantizer,
-                  # TODO: 考慮できないパラメータを渡せないようにする
-                  dim: int | InfInt = infint,
-                  gain_wv: float = _np.inf,
                   allow_unstable: bool = False,
                   verbose: bool = False) -> Tuple["DynamicQuantizer | None", float]:
         """
@@ -1210,10 +1219,6 @@ class DynamicQuantizer():
             Stable and SISO system instance.
         q : StaticQuantizer
             Static quantizer instance.
-        dim : int or InfInt, optional
-            Upper limit of quantizer order (default: infint). `dim` >= 1.
-        gain_wv : float, optional
-            Upper limit of gain w->v (default: inf). `gain_wv` >= 0.
         allow_unstable : bool, optional
             Allow unstable quantizer (default: False).
             It's recommended to set `verbose` to `True`, so that 
@@ -1287,31 +1292,16 @@ class DynamicQuantizer():
             Q = _Q(A_tilde)
 
             E: float = norm(abs(system.C1 @ mpow(A_tilde, tau) @ system.B2)) * q.delta  # type: ignore
-            Q_gain_wv = Q.gain_wv()
 
             if not Q.is_stable:
                 if allow_unstable:
                     if verbose:
                         print("The quantizer is unstable.")
-                    E = _np.inf
+                    return Q, _np.inf
                 else:
                     if verbose:
                         print("The quantizer is unstable. Try other methods.")
                     return None, _np.inf
-            if Q.N > dim:
-                if verbose:
-                    print(
-                        f"The order of the quantizer {Q.N} is greater than {dim}, the value you specified. ",
-                        "Try other methods.",
-                    )
-                return None, _np.inf
-            elif Q_gain_wv > gain_wv:
-                if verbose:
-                    print(
-                        f"The `gain_wv` of the quantizer {Q_gain_wv} is greater than {gain_wv}, the value you specified. ",
-                        "Try other methods.",
-                    )
-                return None, _np.inf
             else:
                 if verbose:
                     print("Success!")

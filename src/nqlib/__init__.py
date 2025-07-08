@@ -13,20 +13,6 @@ by ON/OFF or network with capacity limitations. In such a case, a good output
 may be obtained by converting continuous-valued input to discrete-valued
 input with a quantizer designed by NQLib.
 
-## Install
-
-You can install NQLib by using pip
-
-```sh
-pip install nqlib
-```
-
-or conda.
-
-```sh
-conda install -c conda-forge nqlib
-```
-
 ## Documentation
 
 All the documentation is available at https://knttnk.github.io/NQLib/.

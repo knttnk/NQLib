@@ -86,8 +86,8 @@ class StaticQuantizer():
         delta : float
             The maximum allowed quantization error. Declares that for any real vector `u`, max(abs(q(u)-u)) <= `delta`. `delta` > 0.
         error_on_excess : bool, optional
-            If True, raises error when error exceeds `delta` (default: True).
-            i.e. whether to raise an error when max(abs(q(u)-u)) > `delta` becomes True.
+            If True, raises an error when the error exceeds `delta` (default: True).
+            That is, whether to raise an error when max(abs(q(u)-u)) > `delta` becomes True.
 
         Raises
         ------
@@ -150,7 +150,7 @@ class StaticQuantizer():
 
     def __call__(self, u: NDArrayNum) -> NDArrayNum:
         """
-        Call quantize method.
+        Call the quantize method.
 
         Parameters
         ----------
@@ -213,9 +213,9 @@ class StaticQuantizer():
             Number of bits. Must satisfy `bit` >= 1 (default: `infint`).
             That is, the returned function can take `2**n` values.
         error_on_excess : bool, optional
-            If True, raise error when error exceeds `delta` (=d/2) (default: True).
-            i.e. whether to raise an error when max(abs(q(u)-u)) > `delta` becomes `True`.
-            Basically, this error should not occur, but for numerical safety, set this to True.
+            If True, raises an error when the error exceeds `delta` (=d/2) (default: True).
+            That is, whether to raise an error when max(abs(q(u)-u)) > `delta` becomes True.
+            This error should not occur, but for numerical safety, set this to True.
 
         Returns
         -------
@@ -282,9 +282,9 @@ class StaticQuantizer():
             Number of bits. Must satisfy `bit` >= 1 (default: `infint`).
             That is, the returned function can take `2**n` values.
         error_on_excess : bool, optional
-            If True, raise error when error exceeds `delta` (=d/2) (default: True).
-            i.e. whether to raise an error when max(abs(q(u)-u)) > `delta` becomes `True`.
-            Basically, this error should not occur, but for numerical safety, set this to True.
+            If True, raises an error when the error exceeds `delta` (=d/2) (default: True).
+            That is, whether to raise an error when max(abs(q(u)-u)) > `delta` becomes True.
+            This error should not occur, but for numerical safety, set this to True.
 
         Returns
         -------
@@ -373,7 +373,7 @@ def _nq_serial_decomposition(system: "System",  # type: ignore
                              verbose: bool) -> Tuple["DynamicQuantizer | None", float]:
     """
     Finds the stable and optimal dynamic quantizer for `system`
-    using serial decomposition[1]_.
+    using serial decomposition [1]_.
 
     Parameters
     ----------
@@ -455,6 +455,27 @@ def _nq_serial_decomposition(system: "System",  # type: ignore
 
 def _SVD_from(H2: List[NDArrayNum],
               T: int) -> Tuple[NDArrayNum, NDArrayNum, NDArrayNum, NDArrayNum]:
+    """
+    Compute the SVD from a list of Markov parameters.
+
+    Parameters
+    ----------
+    H2 : list of NDArrayNum
+        List of Markov parameters.
+    T : int
+        Time horizon.
+
+    Returns
+    -------
+    H : NDArrayNum
+        Block Hankel matrix.
+    Wo : NDArrayNum
+        Left singular vectors.
+    S : NDArrayNum
+        Singular values (as a diagonal matrix).
+    Wc : NDArrayNum
+        Right singular vectors.
+    """
     T_dash = math.floor(T / 2) + 1
 
     if T % 2 == 0:
@@ -499,6 +520,8 @@ def _compose_Q_from_SVD(
     dim: int | InfInt,
 ) -> Tuple["DynamicQuantizer", bool]:
     """
+    Compose a DynamicQuantizer from SVD results.
+
     Parameters
     ----------
     system : System
@@ -747,8 +770,8 @@ class DynamicQuantizer():
         References
         ----------
         [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
-        quantizers for discrete-valued input control;IEEE Transactions
-        on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
+        quantizers for discrete-valued input control; IEEE Transactions
+        on Automatic Control, Vol. 53, pp. 2064–2075 (2008)
 
         Example
         -------
@@ -1020,12 +1043,12 @@ class DynamicQuantizer():
         q: StaticQuantizer,
     ) -> "DynamicQuantizer":
         """
-        Create an SISO dynamic quantizer from parameters.
-        Resulting dynamic quantizer is in a reachable canonical form
+        Create a SISO dynamic quantizer from parameters.
+        The resulting dynamic quantizer is in a reachable canonical form
         from a 1D array of parameters, which is a concatenation of
         the coefficients.
 
-        Following is the form of the parameters:
+        The form of the parameters is as follows:
         ```
         a = parameters[:N]
         c = parameters[N:]
@@ -1088,11 +1111,11 @@ class DynamicQuantizer():
         """
         Convert the dynamic quantizer to a 1D array of parameters.
 
-        Parameters here means the elements of A and C matrices of
+        Parameters here means the elements of the A and C matrices of
         a reachable canonical form.
         This quantizer must be SISO.
 
-        Following is the form of the parameters:
+        The form of the parameters is as follows:
         ```
         A = [[      0,      1,      0,    ...,      0]
              [      0,      0,      1,    ...,      0]
@@ -1375,9 +1398,9 @@ class DynamicQuantizer():
             Static quantizer instance.
         allow_unstable : bool, optional
             Allow unstable quantizer (default: False).
-            It's recommended to set `verbose` to `True`, so that 
-            you can remember the result is unstable.
-            If this is `True`, design method in reference [3] will not be used.  # TODO: これを反映させる
+            It is recommended to set `verbose` to `True`, so that 
+            you are reminded the result is unstable.
+            If this is `True`, the design method in reference [3] will not be used.
         verbose : bool, optional
             If True, print progress (default: False).
 
@@ -1477,10 +1500,10 @@ class DynamicQuantizer():
                   solver: str | None = None,
                   verbose: bool = False) -> Tuple["DynamicQuantizer | None", float]:
         """
-        Design a stable and optimal dynamic quantizer using linear programming method.
+        Design a stable and optimal dynamic quantizer using the linear programming method.
 
-        Note that this method doesn't confirm that
-        `Q.gain_wv() < gain_wv` becomes `True`.
+        Note that this method does not guarantee that
+        `Q.gain_wv() < gain_wv` will be `True`.
 
         Parameters
         ----------
@@ -1497,8 +1520,7 @@ class DynamicQuantizer():
         solver : str or None, optional
             CVXPY solver name (default: None). You can check the available solvers by
             `nqlib.installed_solvers()`.
-            (If `None`, this function doesn't
-            specify the solver).
+            (If `None`, this function does not specify the solver).
         verbose : bool, optional
             If True, print progress (default: False).
 
@@ -1779,7 +1801,7 @@ class DynamicQuantizer():
             If True, print progress (default: False).
         method : str, optional
             Optimization method for scipy.optimize.minimize (default: 'SLSQP').
-            (If `None`, this function doesn't specify the method).
+            (If `None`, this function does not specify the method).
         obj_type : str, optional
             Objective function type (default: 'exp').
 
@@ -2063,13 +2085,13 @@ class DynamicQuantizer():
         Returns
         -------
         float
-            Estimation of E(Q) in given steptime.
+            Estimation of E(Q) in the given steptime.
 
         References
         ----------
         [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
-        quantizers for discrete-valued input control;IEEE Transactions
-        on Automatic Control, Vol. 53,pp. 2064–2075 (2008)
+        quantizers for discrete-valued input control; IEEE Transactions
+        on Automatic Control, Vol. 53, pp. 2064–2075 (2008)
 
         Example
         -------

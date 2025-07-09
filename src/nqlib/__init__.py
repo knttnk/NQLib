@@ -69,4 +69,6 @@ __all__ = [
     # solvers
     'installed_solvers',
 ]
-__version__ = "0.5.1"
+
+from packaging.version import Version
+__version__ = Version("1.0.0")

@@ -81,7 +81,7 @@ class NQLibTest(unittest.TestCase):
         Q_5, E_5 = nqlib.DynamicQuantizer.design_GD(
             ideal_system,
             q=q,
-            dim=5,
+            N=5,
             verbose=True,
         )
         # BUG: GDで勾配が0になるのか最適化がされず係数が全て0になることがある
@@ -376,7 +376,7 @@ class NQLibTest(unittest.TestCase):
         Q, E = nqlib.DynamicQuantizer.design_LP(G,
                                                 q=q,
                                                 T=100,
-                                                gain_wv=2,
+                                                max_gain_wv=2,
                                                 dim=5,
                                                 verbose=True)
 
@@ -412,7 +412,7 @@ class NQLibTest(unittest.TestCase):
         Q, E = nqlib.DynamicQuantizer.design_LP(G,
                                                 q=q,
                                                 T=11,
-                                                gain_wv=2,
+                                                max_gain_wv=2,
                                                 dim=2,
                                                 verbose=True)
 
@@ -438,7 +438,7 @@ class NQLibTest(unittest.TestCase):
         Q, E = nqlib.DynamicQuantizer.design_LP(G,
                                                 q=q,
                                                 T=11,
-                                                gain_wv=2,
+                                                max_gain_wv=2,
                                                 dim=1,
                                                 verbose=True)
 
@@ -481,7 +481,7 @@ class NQLibTest(unittest.TestCase):
         Q_g, E_g = nqlib.DynamicQuantizer.design_GD(
             ideal_system,
             q=q,
-            dim=A.shape[0],
+            N=A.shape[0],
             verbose=True,
         )
         print(f"optimal E = {E}, optimized E_g = {E_g}")
@@ -532,7 +532,7 @@ class NQLibTest(unittest.TestCase):
         Q_d, E_d = nqlib.DynamicQuantizer.design_DE(
             ideal_system,
             q=q,
-            dim=Q.minreal.A.shape[0],
+            N=Q.minreal.A.shape[0],
             verbose=True,
         )
 
@@ -575,8 +575,9 @@ class NQLibTest(unittest.TestCase):
             Q = nqlib.DynamicQuantizer.from_SISO_parameters(x, q=q)
             return Q.objective_function(
                 G,
-                T=100,
-                gain_wv=2,
+                steptime_gain_wv=100,
+                steptime_E=100,
+                max_gain_wv=2.0,
                 # obj_type="exp",
             )
         optimization_result = minimize(

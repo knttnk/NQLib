@@ -1,12 +1,17 @@
 # Changelog for NQLib
 
-## Not yet released
+## 1.0.0
 
 ### Breaking changes
 
 - NQLib now requires Python 3.11 or later.
 - `design_AG()` now raises an error if `dim` or `gain_wv` are passed.
   - Users have to check specifications of the quantizer and set `dim` and `gain_wv` manually.
+- The following arguments have been renamed based on their roles:
+  - `gain_wv` → `max_gain_wv`
+  - `T` → `steptime`, `steptime_gain_wv`, `steptime_E`
+  - `dim` → `N`, `max_N`, `new_N`
+  - Regarding `design_LP()`, roles of its arguments are complicated, so the names are not changed.
 
 ### New features
 

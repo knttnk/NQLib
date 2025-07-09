@@ -1055,7 +1055,7 @@ class System():
             minimum=1,
             name="steptime",
         )
-        if not _check_stability and steptime is infint:
+        if (not _check_stability) and (steptime is infint):
             raise ValueError(
                 "`(not _check_stability and steptime is infint)` must be `False`."
             )

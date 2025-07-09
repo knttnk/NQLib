@@ -84,7 +84,9 @@ class StaticQuantizer():
         function : Callable[[NDArrayNum], NDArrayNum]
             Quantization function. Must be callable.
         delta : float
-            The maximum allowed quantization error. Declares that for any real vector `u`, max(abs(q(u)-u)) <= `delta`. `delta` > 0.
+            The maximum allowed quantization error.
+            Declares that for any real vector `u`,
+            max(abs(q(u)-u)) <= `delta`. `delta` > 0.
         error_on_excess : bool, optional
             If True, raises an error when the error exceeds `delta` (default: True).
             That is, whether to raise an error when max(abs(q(u)-u)) > `delta` becomes True.
@@ -104,7 +106,7 @@ class StaticQuantizer():
         >>> q([1.2, 2.3])
         array([1., 2.])
         """
-        self.delta = validate_float(
+        self._delta = validate_float(
             delta,
             infimum=0.0,  # delta must be greater than 0
         )
@@ -134,6 +136,15 @@ class StaticQuantizer():
             else:
                 self._function = function
 
+    @property
+    def delta(self) -> float:
+        """
+        The maximum allowed quantization error.
+        Declares that for any real vector `u`,
+        max(abs(q(u)-u)) <= `delta`. `delta` > 0.
+        """
+        return self._delta
+    
     def __str__(self):
         return f"q(*; delta={self.delta})"
 
@@ -379,10 +390,7 @@ def _nq_serial_decomposition(system: "System",  # type: ignore
     ----------
     system : System
     q : StaticQuantizer
-    T : int
-    gain_wv : float
     verbose : bool
-    dim : int
 
     Returns
     -------
@@ -517,7 +525,7 @@ def _compose_Q_from_SVD(
     Wo: _np.ndarray,
     S: _np.ndarray,
     Wc: _np.ndarray,
-    dim: int | InfInt,
+    max_N: int | InfInt,
 ) -> Tuple["DynamicQuantizer", bool]:
     """
     Compose a DynamicQuantizer from SVD results.
@@ -532,7 +540,7 @@ def _compose_Q_from_SVD(
     Wo : np.matrix
     S : np.matrix
     Wc : np.matrix
-    dim : int or np.inf
+    max_N : int or np.inf
 
     Returns
     -------
@@ -545,8 +553,8 @@ def _compose_Q_from_SVD(
 
     # set order
     reduced = False
-    if dim < m * T_dash:  # needs reduction
-        nQ: int = dim  # type: ignore  # This will not occur if dim is infint.
+    if max_N < m * T_dash:  # needs reduction
+        nQ: int = max_N  # type: ignore  # This will not occur if max_N is infint.
         reduced = True
     else:
         nQ = m * T_dash
@@ -633,37 +641,81 @@ class DynamicQuantizer():
         >>> Q.quantize([0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6])
         array([[1., 1., 1., 1., 1., 2., 3.]])
         """
-        A_mat = matrix(A)
-        B_mat = matrix(B)
-        C_mat = matrix(C)
-
-        self.N = A_mat.shape[0]
-        self.m = B_mat.shape[1]
-
-        if A_mat.shape != (self.N, self.N):
+        self._A = matrix(A)
+        self._B = matrix(B)
+        self._C = matrix(C)
+        self._q = q
+        self._gain_uv = 1.0
+        
+        if self.A.shape != (self.N, self.N):
             raise ValueError("A must be a square matrix.")
-        if B_mat.shape != (self.N, self.m):
+        if self.B.shape != (self.N, self.m):
             raise ValueError(
                 "The number of rows in matrices `A` and `B` must be the same."
             )
-        if C_mat.shape[0] != self.m:
+        if self.C.shape[0] != self.m:
             raise ValueError(
                 "The number of columns in matrix `B` and "
                 "the number of rows in matrix `C` must be the same."
             )
-        if C_mat.shape[1] != self.N:
+        if self.C.shape[1] != self.N:
             raise ValueError(
                 "The number of columns in matrices `A` and `C` must be the same."
             )
-        if C_mat.shape != (self.m, self.N):
+        if self.C.shape != (self.m, self.N):
             raise ValueError("`C must be a 2D array.`")
 
-        self.A = A_mat
-        self.B = B_mat
-        self.C = C_mat
-        self.q = q
-        self.delta = q.delta
-        self.gain_uv = 1.0
+    @property
+    def A(self) -> NDArrayNum:
+        """State matrix (N x N, real). N >= 1."""
+        return self._A
+
+    @property
+    def B(self) -> NDArrayNum:
+        """Input matrix (N x m, real). m >= 1."""
+        return self._B
+
+    @property
+    def C(self) -> NDArrayNum:
+        """Output matrix (m x N, real)."""
+        return self._C
+
+    @property
+    def N(self) -> int:
+        """
+        Order of this dynamic quantizer (N >= 1).
+
+        Equals the number of rows (or columns) in `A`.
+        """
+        return self.A.shape[0]
+    
+    @property
+    def m(self) -> int:
+        """
+        Number of inputs (m >= 1).
+
+        Equals the number of columns in `B` and the number of rows in `C`.
+        """
+        return self.B.shape[1]
+
+    @property
+    def q(self) -> StaticQuantizer:
+        """Static quantizer which is used in this dynamic quantizer."""
+        return self._q
+
+    @property
+    def delta(self) -> float:
+        """
+        The maximum allowed quantization error of `q`.
+        Declares that for any real vector `u`,
+        max(abs(q(u)-u)) <= `delta`. `delta` > 0.
+        """
+        return self.q.delta
+
+    @property
+    def gain_uv(self) -> float:
+        """Gain from u to v."""
+        return 1.0
 
     def _matrix_str(self,
                     index: int,
@@ -815,26 +867,30 @@ class DynamicQuantizer():
         self,
         system: "System",  # type: ignore
         *,
-        T: int | InfInt = infint,
-        gain_wv: Real = _np.inf,  # type: ignore
+        steptime_gain_wv: int | InfInt = infint,
+        steptime_E: int | InfInt = infint,
+        max_gain_wv: Real = _np.inf,  # type: ignore
         obj_type: str = ["exp", "atan", "1.1", "100*1.1"][0],
     ) -> Real:
         """
         Objective function designed for numerical optimization.
 
         If this value is less than 0, the quantizer satisfies the stability
-        and `gain_wv` constraints.
+        and `max_gain_wv` constraints.
         The less this value is, the better the quantizer (i.e., the less `system.E(Q)`).
 
         Parameters
         ----------
         system : System
             The system for which the quantizer is being optimized. Must be stable and SISO.
-        T : int or InfInt, optional
-            The number of time steps for calculating `gain_wv` and `system.E(Q)`.
-            `T` >= 1 (default: `infint`, which means until convergence).
-        gain_wv : float, optional
-            Upper limit for the w->v gain. `gain_wv` >= 0 (default: `np.inf`).
+        steptime_gain_wv : int or InfInt, optional
+            The number of time steps for calculating `max_gain_wv`.
+            `steptime_gain_wv` >= 1 (default: `infint`, which means until convergence).
+        steptime_E : int or InfInt, optional
+            The number of time steps for calculating `system.E(Q)`.
+            `steptime_E` >= 1 (default: `infint`, which means until convergence).
+        max_gain_wv : float, optional
+            Upper limit for the w->v gain. `max_gain_wv` >= 0 (default: `np.inf`).
         obj_type : str, optional
             Objective function type. Must be one of ['exp', 'atan', '1.1', '100*1.1']
             (default: 'exp').
@@ -844,7 +900,7 @@ class DynamicQuantizer():
         float
             Objective value.
             If the value is less than 0, the quantizer satisfies the constraints.
-            Otherwise, the value is `max(eig_max(A + B @ C) - 1, Q.gain_wv(T) - gain_wv)`.
+            Otherwise, the value is `max(eig_max(A + B @ C) - 1, Q.gain_wv() - max_gain_wv)`.
 
         Example
         -------
@@ -854,7 +910,13 @@ class DynamicQuantizer():
         >>> Q.is_stable
         False
         >>> system = nqlib.System(0, 0, 0, 0, 0, 0, 0)
-        >>> Q.objective_function(system, T=10, gain_wv=1.0, obj_type="exp") > 0  # because unstable
+        >>> Q.objective_function(
+        ...     system,
+        ...     steptime_gain_wv=10,
+        ...     steptime_E=10,
+        ...     max_gain_wv=1.0,
+        ...     obj_type="exp",
+        ... ) > 0  # because unstable
         np.True_
 
         References
@@ -864,10 +926,15 @@ class DynamicQuantizer():
         Journal of Computational Intelligence and Applications, Vol. 15,
         No. 2, 1650008 (2016)
         """
-        T = validate_int_or_inf(
-            T,
-            minimum=1,  # T must be greater than 0
-            name="T",
+        steptime_gain_wv = validate_int_or_inf(
+            steptime_gain_wv,
+            minimum=1,  # must be greater than 0
+            name="steptime_gain_wv",
+        )
+        steptime_E = validate_int_or_inf(
+            steptime_E,
+            minimum=1,  # must be greater than 0
+            name="steptime_E",
         )
         if system.m != 1:
             raise ValueError("`design_GD` and `design_DE` is currently supported for SISO systems only.")
@@ -878,17 +945,17 @@ class DynamicQuantizer():
         constraint_values: List[Real] = [
             eig_max(self.A + self.B @ self.C) - 1,
         ]
-        if not _np.isposinf(gain_wv):
-            constraint_values.append(self.gain_wv(T) - gain_wv)
+        if not _np.isposinf(max_gain_wv):
+            constraint_values.append(self.gain_wv(steptime_gain_wv) - max_gain_wv)
 
         max_v = _np.max(constraint_values)
         if max_v < 0:
             types = ["exp", "atan", "1.1", "100*1.1"]
             E = self.cost(
                 system,
-                steptime=T,
-                # If T is infint, self.cost raises Error when _check* = False.
-                _check_stability=T is infint,
+                steptime=steptime_E,
+                # If steptime is infint, self.cost raises Error when _check* = False.
+                _check_stability=steptime_E is infint,
             )
             if obj_type == types[0]:
                 return - _np.exp(- E)
@@ -904,14 +971,14 @@ class DynamicQuantizer():
         else:
             return max_v
 
-    def order_reduced(self, dim: int) -> "DynamicQuantizer":
+    def order_reduced(self, new_N: int) -> "DynamicQuantizer":
         """
         Returns a reduced-order quantizer.
 
         Parameters
         ----------
-        dim : int
-            Desired order (1 <= `dim` < `self.N`).
+        new_N : int
+            Desired order (1 <= `new_N` < `self.N`).
 
         Returns
         -------
@@ -923,7 +990,7 @@ class DynamicQuantizer():
         ImportError
             If slycot is not installed.
         ValueError
-            If `dim` is not in the valid range.
+            If `new_N` is not in the valid range.
 
         Notes
         -----
@@ -946,11 +1013,11 @@ class DynamicQuantizer():
         >>> Q2.N
         1
         """
-        dim = validate_int(
-            dim,
+        new_N = validate_int(
+            new_N,
             minimum=1,
             maximum=self.N - 1,  # order must be less than N
-            name="dim",
+            name="new_N",
         )
         try:
             from slycot import ab09ad
@@ -968,7 +1035,7 @@ class DynamicQuantizer():
             self.m,  # np.size(B,1)
             self.m,  # np.size(C,0)
             self.A, self.B, self.C,
-            nr=dim,
+            nr=new_N,
             tol=0.0,  # type: ignore
         )
         return DynamicQuantizer(Ar, Br, Cr, self.q)
@@ -1171,9 +1238,9 @@ class DynamicQuantizer():
         system: "System",  # type: ignore
         *,
         q: StaticQuantizer,
-        T: int | InfInt = infint,
-        gain_wv: float = _np.inf,
-        dim: int | InfInt = infint,
+        steptime: int | InfInt = infint,
+        max_gain_wv: float = _np.inf,
+        max_N: int | InfInt = infint,
         verbose: bool = False,
         use_analytical_method: bool = True,
         use_LP_method: bool = True,
@@ -1190,12 +1257,12 @@ class DynamicQuantizer():
             Stable system instance.
         q : StaticQuantizer
             Static quantizer instance.
-        T : int or InfInt, optional
-            Estimation time (default: infint). `T` >= 1.
-        gain_wv : float, optional
-            Upper limit of gain w->v (default: inf). `gain_wv` >= 0.
-        dim : int or InfInt, optional
-            Upper limit of quantizer order (default: infint). `dim` >= 1.
+        steptime : int or InfInt, optional
+            Estimation time (default: infint). `steptime` >= 1.
+        max_gain_wv : float, optional
+            Upper limit of gain w->v (default: inf). `max_gain_wv` >= 0.
+        max_N : int or InfInt, optional
+            Upper limit of quantizer order (default: infint). `max_N` >= 1.
         verbose : bool, optional
             If True, print progress (default: False).
         use_analytical_method : bool, optional
@@ -1237,7 +1304,7 @@ class DynamicQuantizer():
         >>> Q, E = nqlib.DynamicQuantizer.design(
         ...     system=G,
         ...     q=q,
-        ...     T=100,
+        ...     steptime=100,
         ... )
         >>> Q.is_stable
         True
@@ -1285,17 +1352,17 @@ class DynamicQuantizer():
             )
 
         # check gain_wv
-        gain_wv = validate_float(
-            gain_wv,
-            infimum=0.0,  # gain_wv must be greater than 0
-            name="gain_wv",
+        max_gain_wv = validate_float(
+            max_gain_wv,
+            infimum=0.0,  # max_gain_wv must be greater than 0
+            name="max_gain_wv",
         )
 
-        # check dim
-        dim = validate_int_or_inf(
-            dim,
+        # check max_N
+        max_N = validate_int_or_inf(
+            max_N,
             minimum=1,  # order must be greater than 0
-            name="dim",
+            name="max_N",
         )
 
         # algebraically optimize
@@ -1307,16 +1374,16 @@ class DynamicQuantizer():
             )
             if Q is not None:
                 # Check specs before return
-                if Q.N > dim:
+                if Q.N > max_N:
                     if verbose:
                         print(
-                            f"The order of the quantizer {Q.N} is greater than {dim}, the value you specified. ",
+                            f"The order of the quantizer {Q.N} is greater than {max_N}, the value you specified. ",
                             "Try other methods.",
                         )
-                elif (Q_gain_wv := Q.gain_wv()) > gain_wv:
+                elif (Q_gain_wv := Q.gain_wv()) > max_gain_wv:
                     if verbose:
                         print(
-                            f"The `gain_wv` of the quantizer {Q_gain_wv} is greater than {gain_wv}, the value you specified. ",
+                            f"The `gain_wv` of the quantizer {Q_gain_wv} is greater than {max_gain_wv}, the value you specified. ",
                             "Try other methods.",
                         )
                 else:
@@ -1325,43 +1392,43 @@ class DynamicQuantizer():
 
         candidates: List[Tuple[DynamicQuantizer, float]] = []
         # numerically optimize
-        T = validate_int_or_inf(
-            T,
-            minimum=1,  # T must be greater than 0
-            name="T",
+        steptime = validate_int_or_inf(
+            steptime,
+            minimum=1,  # must be greater than 0
+            name="steptime",
         )
         if use_LP_method:
             Q, E = DynamicQuantizer.design_LP(
                 system,
                 q=q,
-                dim=dim,
-                T=T,
-                gain_wv=gain_wv,
+                dim=max_N,
+                T=steptime,
+                max_gain_wv=max_gain_wv,
                 solver=solver,
                 verbose=verbose,
             )
             _print_report(Q, "the LP method")
             if Q is not None:
                 candidates.append((Q, E))
-        if use_design_GB_method and isinstance(dim, int):
+        if use_design_GB_method and isinstance(max_N, int):
             Q, E = DynamicQuantizer.design_GD(
                 system,
                 q=q,
-                dim=dim,
-                T=T,
-                gain_wv=gain_wv,
+                N=max_N,
+                steptime=steptime,
+                max_gain_wv=max_gain_wv,
                 verbose=verbose,
             )
             _print_report(Q, "the gradient based method")
             if Q is not None:
                 candidates.append((Q, E))
-        if use_DE_method and isinstance(dim, int):
+        if use_DE_method and isinstance(max_N, int):
             Q, E = DynamicQuantizer.design_DE(
                 system,
                 q=q,
-                dim=dim,
-                T=T,
-                gain_wv=gain_wv,
+                N=max_N,
+                steptime=steptime,
+                max_gain_wv=max_gain_wv,
                 verbose=verbose,
             )
             _print_report(Q, "the gradient based method")
@@ -1498,14 +1565,14 @@ class DynamicQuantizer():
                   q: StaticQuantizer,
                   dim: int | InfInt = infint,
                   T: int | InfInt = infint,
-                  gain_wv: float = _np.inf,
+                  max_gain_wv: float = _np.inf,
                   solver: str | None = None,
                   verbose: bool = False) -> Tuple["DynamicQuantizer | None", float]:
         """
         Design a stable and optimal dynamic quantizer using the linear programming method.
 
         Note that this method does not guarantee that
-        `Q.gain_wv() < gain_wv` will be `True`.
+        `Q.gain_wv() < max_gain_wv` will be `True`.
 
         Parameters
         ----------
@@ -1517,8 +1584,8 @@ class DynamicQuantizer():
             Upper limit of quantizer order (default: infint). `dim` >= 1.
         T : int or InfInt, optional
             Estimation time (default: infint) (`T` > 0).
-        gain_wv : float, optional
-            Upper limit of gain w->v (default: inf) (`gain_wv` > 0).
+        max_gain_wv : float, optional
+            Upper limit of gain w->v (default: inf) (`max_gain_wv` > 0).
         solver : str or None, optional
             CVXPY solver name (default: None). You can check the available solvers by
             `nqlib.installed_solvers()`.
@@ -1563,7 +1630,7 @@ class DynamicQuantizer():
         ...     q=q,
         ...     T=100,
         ...     dim=2,
-        ...     gain_wv=2.0,
+        ...     max_gain_wv=2.0,
         ... )
         >>> Q.is_stable
         True
@@ -1595,10 +1662,10 @@ class DynamicQuantizer():
             minimum=1,  # order must be greater than 0
             name="dim",
         )
-        gain_wv = validate_float(
-            gain_wv,
-            infimum=0.0,  # gain_wv must be greater than 0
-            name="gain_wv",
+        max_gain_wv = validate_float(
+            max_gain_wv,
+            infimum=0.0,  # max_gain_wv must be greater than 0
+            name="max_gain_wv",
         )
         if T * float(dim) > 1000:
             if verbose:
@@ -1706,8 +1773,8 @@ class DynamicQuantizer():
                     for k in range(T)
                 ],
             ]
-            if gain_wv < _np.inf:
-                _c: cvxpy.Constraint = (_np.eye(m) + sum(H2_bar)) @ one_m <= gain_wv * one_m  # type: ignore
+            if max_gain_wv < _np.inf:
+                _c: cvxpy.Constraint = (_np.eye(m) + sum(H2_bar)) @ one_m <= max_gain_wv * one_m  # type: ignore
                 constraints.append(_c)
 
             problem = cvxpy.Problem(
@@ -1758,7 +1825,6 @@ class DynamicQuantizer():
             if verbose:
                 print("Calculating E(Q).")
             E = system.E(Q, steptime=T, _check_stability=False, verbose=verbose)
-        # Q_gain_wv = Q.gain_wv(steptime=T, verbose=verbose)
         if Q.N > dim:
             if verbose:
                 warnings.warn(
@@ -1766,10 +1832,11 @@ class DynamicQuantizer():
                     "Please reduce the order manually using `order_reduced()`, or try other methods.",
                 )
             return Q, E
-        # elif Q_gain_wv > gain_wv:
-        #     warnings.warn(
-        #         f"The `gain_wv` of the quantizer {Q_gain_wv} is greater than {gain_wv}, the value you specified. ",
-        #     )
+        elif (Q_gain_wv := Q.gain_wv(steptime=T, verbose=verbose)) > max_gain_wv:
+            if verbose:
+                warnings.warn(
+                    f"The `gain_wv` of the quantizer {Q_gain_wv} is greater than {max_gain_wv}, the value you specified. ",
+                )
         if verbose:
             print("Success!")
         return Q, E
@@ -1779,9 +1846,9 @@ class DynamicQuantizer():
         system: "System",  # type: ignore
         *,
         q: StaticQuantizer,
-        dim: int,
-        T: int | InfInt = infint,
-        gain_wv: float = _np.inf,
+        N: int,
+        steptime: int | InfInt = infint,
+        max_gain_wv: float = _np.inf,
         verbose: bool = False,
         method: str = "SLSQP",
         obj_type: str = ["exp", "atan", "1.1", "100*1.1"][0],
@@ -1795,12 +1862,12 @@ class DynamicQuantizer():
             Stable and SISO system instance.
         q : StaticQuantizer
             Static quantizer instance.
-        dim : int
-            Quantizer order. `dim` >= 1.
-        T : int or InfInt, optional
-            Estimation time (default: infint). `T` >= 1.
-        gain_wv : float, optional
-            Upper limit of gain w->v (default: inf). `gain_wv` >= 0.
+        N : int
+            Order of the resulting quantizer. `N` >= 1.
+        steptime : int or InfInt, optional
+            Estimation time (default: infint). `steptime` >= 1.
+        max_gain_wv : float, optional
+            Upper limit of gain w->v (default: inf). `max_gain_wv` >= 0.
         verbose : bool, optional
             If True, print progress (default: False).
         method : str, optional
@@ -1846,30 +1913,30 @@ class DynamicQuantizer():
         >>> Q, E = nqlib.DynamicQuantizer.design_GD(
         ...     system=G,
         ...     q=q,
-        ...     dim=2,
+        ...     N=2,
         ... )
         >>> Q.is_stable
         True
         >>> E < 0.01
         np.True_
         """
-        T = validate_int_or_inf(
-            T,
-            minimum=1,  # T must be greater than 0
-            name="T",
+        steptime = validate_int_or_inf(
+            steptime,
+            minimum=1,  # steptime must be greater than 0
+            name="steptime",
         )
-        dim = validate_int(
-            dim,
+        N = validate_int(
+            N,
             minimum=1,  # order must be greater than 0
-            name="dim",
+            name="N",
         )
         # TODO: check if system is SISO
 
         def obj(x: NDArrayNum) -> Real:
             return DynamicQuantizer.from_SISO_parameters(x, q=q).objective_function(
                 system,
-                T=T,
-                gain_wv=gain_wv,  # type: ignore
+                steptime_gain_wv=steptime,
+                max_gain_wv=max_gain_wv,  # type: ignore
                 obj_type=obj_type,
             )
 
@@ -1882,7 +1949,7 @@ class DynamicQuantizer():
             )
         result = _minimize(
             obj,
-            x0=_np.random.randn(2 * dim) * 0.001,  # TODO: Better init
+            x0=_np.random.randn(2 * N) * 0.001,  # TODO: Better init
             tol=0,
             options={
                 "disp": verbose,
@@ -1915,9 +1982,9 @@ class DynamicQuantizer():
         system: "System",  # type: ignore
         *,
         q: StaticQuantizer,
-        dim: int,  # This must be finite
-        T: int | InfInt = infint,  # TODO: これより下を反映
-        gain_wv: float = _np.inf,
+        N: int,  # This must be finite
+        steptime: int | InfInt = infint,  # TODO: これより下を反映
+        max_gain_wv: float = _np.inf,
         verbose: bool = False,
     ) -> Tuple["DynamicQuantizer | None", float]:  # TODO: method のデフォルトを決める
         """
@@ -1929,12 +1996,12 @@ class DynamicQuantizer():
             Stable and SISO system instance.
         q : StaticQuantizer
             Static quantizer instance.
-        dim : int
-            Order of the quantizer. `dim` >= 1.
-        T : int or InfInt, optional
-            Estimation time (default: infint). `T` >= 1.
-        gain_wv : float, optional
-            Upper limit of gain w->v (default: inf). `gain_wv` >= 0.
+        N : int
+            Order of the resulting quantizer. `N` >= 1.
+        steptime : int or InfInt, optional
+            Estimation time (default: infint). `steptime` >= 1.
+        max_gain_wv : float, optional
+            Upper limit of gain w->v (default: inf). `max_gain_wv` >= 0.
         verbose : bool, optional
             If True, print progress (default: False).
 
@@ -1974,36 +2041,36 @@ class DynamicQuantizer():
         >>> Q, E = nqlib.DynamicQuantizer.design_DE(
         ...     system=G,
         ...     q=q,
-        ...     dim=2,
+        ...     N=2,
         ... )
         >>> Q.is_stable
         True
         >>> E < 0.01
         np.True_
         """
-        T = validate_int_or_inf(
-            T,
-            minimum=1,  # T must be greater than 0
-            name="T",
+        steptime = validate_int_or_inf(
+            steptime,
+            minimum=1,  # steptime must be greater than 0
+            name="steptime",
         )
-        dim = validate_int(
-            dim,
+        N = validate_int(
+            N,
             minimum=1,  # order must be greater than 0
-            name="dim",
+            name="N",
         )
 
         def obj(x: NDArrayNum) -> Real:
             return DynamicQuantizer.from_SISO_parameters(x, q=q).objective_function(
                 system,
-                T=T,
-                gain_wv=gain_wv,  # type: ignore
+                steptime_gain_wv=steptime,
+                max_gain_wv=max_gain_wv,  # type: ignore
             )
 
         def comb(k: int) -> int:
-            return _comb(dim, k, exact=True, repetition=False)  # type: ignore
+            return _comb(N, k, exact=True, repetition=False)  # type: ignore
 
         # optimize
-        bounds = [matrix([-1, 1])[0] * comb(i) for i in range(dim)] + [matrix([-2, 2])[0] * comb(dim // 2) for _ in range(dim)]
+        bounds = [matrix([-1, 1])[0] * comb(i) for i in range(N)] + [matrix([-2, 2])[0] * comb(N // 2) for _ in range(N)]
         if verbose:
             print("Designing a quantizer with differential evolution.")
             print("### Message from `scipy.optimize.differential_evolution()`. ###")
@@ -2160,7 +2227,7 @@ class DynamicQuantizer():
         return s
 
 
-def order_reduced(Q: DynamicQuantizer, dim: int) -> DynamicQuantizer:
+def order_reduced(Q: DynamicQuantizer, new_N: int) -> DynamicQuantizer:
     """
     Returns the quantizer with its order reduced.
 
@@ -2175,8 +2242,8 @@ def order_reduced(Q: DynamicQuantizer, dim: int) -> DynamicQuantizer:
     ----------
     Q : DynamicQuantizer
         The quantizer to be reduced. Must be an instance of `DynamicQuantizer`.
-    dim : int
-        Desired order (1 <= `dim` < `Q.N`).
+    new_N : int
+        Desired order (1 <= `new_N` < `Q.N`).
 
     Returns
     -------
@@ -2195,9 +2262,9 @@ def order_reduced(Q: DynamicQuantizer, dim: int) -> DynamicQuantizer:
     >>> Q2.N
     1
     """
-    dim = validate_int(
-        dim,
+    new_N = validate_int(
+        new_N,
         minimum=1,  # order must be greater than 0
-        name="dim",
+        name="new_N",
     )
-    return Q.order_reduced(dim)
+    return Q.order_reduced(new_N)

@@ -1,6 +1,9 @@
 # NQLib
 
 [![Test NQLib](https://github.com/knttnk/NQLib/actions/workflows/test-python-package.yml/badge.svg)](https://github.com/knttnk/NQLib/actions/workflows/test-python-package.yml)
+[![PyPI Downloads](https://static.pepy.tech/personalized-badge/nqlib?period=total&units=INTERNATIONAL_SYSTEM&left_color=GRAY&right_color=BLUE&left_text=PyPI+downloads)](https://pepy.tech/projects/nqlib)
+[![Anaconda-Server Badge](https://anaconda.org/conda-forge/nqlib/badges/downloads.svg)](https://anaconda.org/conda-forge/nqlib)
+
 
 NQLib is a <a href="https://www.python.org/" target="_blank">Python</a> library to design noise shaping quantizer for discrete-valued input control.
 
@@ -44,3 +47,4 @@ The algorithms used in NQLib are based on the following paper.
 ## License
 
 This software is released under the MIT License, see LICENSE.txt.
+

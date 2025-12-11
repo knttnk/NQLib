@@ -208,6 +208,58 @@ class StaticQuantizer():
         """
         return self._function(u)
 
+    def cost(self,
+             system: "System",  # type: ignore
+             steptime: int | InfInt = infint,
+             _check_stability: bool = True) -> float:
+        """
+        Compute the cost (E(Q)) for this quantizer and system.
+
+        Parameters
+        ----------
+        system : System
+            System instance.
+        steptime : int or InfInt, optional
+            Number of steps (default: infint, which implies that this function
+            calculates until convergence). `steptime` >= 1.
+        _check_stability : bool, optional
+            If True, check stability (default: True).
+
+        Returns
+        -------
+        float
+            Estimation of E(Q) in the given steptime.
+
+        References
+        ----------
+        [1] S. Azuma and T. Sugie: Synthesis of optimal dynamic
+        quantizers for discrete-valued input control; IEEE Transactions
+        on Automatic Control, Vol. 53, pp. 2064–2075 (2008)
+
+        Example
+        -------
+        >>> import nqlib
+        >>> import numpy as np
+        >>> G = nqlib.System(
+        ...     A=[[1.15, 0.05],
+        ...        [0.00, 0.99]],
+        ...     B1=[[1],
+        ...         [1]],
+        ...     B2=[[0.004],
+        ...         [0.099]],
+        ...     C1=[1., 0.], C2=[-15., -3.],
+        ...     D1=0, D2=0,
+        ... )
+        >>> q = nqlib.StaticQuantizer.mid_tread(d=2)
+        >>> Q, E = nqlib.DynamicQuantizer.design_AG(
+        ...     system=G,
+        ...     q=q,
+        ... )
+        >>> Q.cost(G) < q.cost(G)
+        np.True_
+        """
+        return system.E(self, steptime, _check_stability)
+
     @staticmethod
     def mid_tread(d: float,
                   bit: Union[InfInt, int] = infint,
@@ -2141,7 +2193,7 @@ class DynamicQuantizer():
              steptime: int | InfInt = infint,
              _check_stability: bool = True) -> float:
         """
-        Compute the cost (E(Q)) for the quantizer and system.
+        Compute the cost (E(Q)) for this quantizer and system.
 
         Parameters
         ----------

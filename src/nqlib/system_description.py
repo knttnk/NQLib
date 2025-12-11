@@ -67,7 +67,7 @@ class Controller(object):
     ...                      D2=[-20, -3])
     >>> K.A
     array([[0]])
-    """        
+    """
 
     def __init__(self, A: ArrayLike, B1: ArrayLike, B2: ArrayLike, C: ArrayLike, D1: ArrayLike, D2: ArrayLike):
         """
@@ -753,7 +753,7 @@ class System():
 
         'from_FB_connection_with_input_quantizer' means that a
         quantizer is inserted as shown in the following figure.
-        
+
         ..  code-block:: none
 
             |       ┌───────┐     ┌───────┐     ┌───────┐       
@@ -998,7 +998,7 @@ class System():
             return True
 
     def E(self,
-          Q: DynamicQuantizer,
+          Q: DynamicQuantizer | StaticQuantizer,
           steptime: int | InfInt = infint,
           _check_stability: bool = True,
           verbose: bool = False) -> float:
@@ -1007,8 +1007,8 @@ class System():
 
         Parameters
         ----------
-        Q : DynamicQuantizer
-            Dynamic quantizer instance. The quantizer whose performance is evaluated.
+        Q : DynamicQuantizer or StaticQuantizer
+            DynamicQuantizer or StaticQuantizer instance. The quantizer whose performance is evaluated.
         steptime : int or InfInt, optional
             Evaluation time. Must be a natural number (`steptime` >= 1). Default: `infint`.
         _check_stability : bool, optional
@@ -1049,6 +1049,8 @@ class System():
         ... )
         >>> np.isclose(E, G.E(Q))
         np.True_
+        >>> G.E(Q) < G.E(q)
+        np.True_
         """
         steptime = validate_int_or_inf(
             steptime,
@@ -1059,19 +1061,24 @@ class System():
             raise ValueError(
                 "`(not _check_stability and steptime is infint)` must be `False`."
             )
-        A_tilde = self.A + self.B2 @ self.C2  # convert to closed loop (only G)
+        A_tilde: NDArrayNum = self.A + self.B2 @ self.C2  # convert to closed loop (only G)
 
-        A_bar = block([
-            [A_tilde, self.B2 @ Q.C],
-            [zeros((Q.A.shape[0], A_tilde.shape[0])), Q.A + Q.B @ Q.C],
-        ])
-        B_bar = block([
-            [self.B2],
-            [Q.B],
-        ])
-        C_bar = block([
-            [self.C1, zeros((self.C1.shape[0], Q.A.shape[0]))]
-        ])
+        if isinstance(Q, DynamicQuantizer):
+            A_bar = block([
+                [A_tilde, self.B2 @ Q.C],
+                [zeros((Q.A.shape[0], A_tilde.shape[0])), Q.A + Q.B @ Q.C],
+            ])
+            B_bar = block([
+                [self.B2],
+                [Q.B],
+            ])
+            C_bar = block([
+                [self.C1, zeros((self.C1.shape[0], Q.A.shape[0]))]
+            ])
+        else:  # StaticQuantizer
+            A_bar = A_tilde
+            B_bar = self.B2
+            C_bar = self.C1
 
         # E = infinity
         if _check_stability:

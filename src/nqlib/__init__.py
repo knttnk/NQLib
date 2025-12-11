@@ -71,4 +71,4 @@ __all__ = [
 ]
 
 from packaging.version import Version
-__version__ = Version("1.0.0")
+__version__ = Version("1.0.1")

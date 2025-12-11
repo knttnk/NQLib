@@ -1,5 +1,10 @@
 # Changelog for NQLib
 
+## 1.0.1
+
+- `IdealSystem.E()` now supports `StaticQuantizer`.
+- `StaticQuantizer` now has the method `cost()` to compute its cost, similar to `DynamicQuantizer.cost()`.
+
 ## 1.0.0
 
 ### Breaking changes

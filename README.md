@@ -4,7 +4,6 @@
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/nqlib?period=total&units=INTERNATIONAL_SYSTEM&left_color=GRAY&right_color=BLUE&left_text=PyPI+downloads)](https://pepy.tech/projects/nqlib)
 [![Anaconda-Server Badge](https://anaconda.org/conda-forge/nqlib/badges/downloads.svg)](https://anaconda.org/conda-forge/nqlib)
 
-
 NQLib is a <a href="https://www.python.org/" target="_blank">Python</a> library to design noise shaping quantizer for discrete-valued input control.
 
 ## What can I do with NQLib?
@@ -48,3 +47,10 @@ The algorithms used in NQLib are based on the following paper.
 
 This software is released under the MIT License, see LICENSE.txt.
 
+## How to Cite NQLib
+
+If you use NQLib, please support the project by citing the paper according to the steps below. This encourages further development and leads to more frequent updates.
+
+1. Head to [the repository of NQLib](https://github.com/knttnk/NQLib).
+2. Click on the "Cite this repository" button on the right side of the page.
+3. Follow the instructions to generate a citation in your preferred format.

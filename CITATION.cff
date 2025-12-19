@@ -1,0 +1,52 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite both the article from preferred-citation and the software itself."
+preferred-citation:
+  type: article
+  authors:
+    - family-names: Tanaka
+      given-names: Kenta
+      orcid: https://orcid.org/0000-0003-4077-4679
+      website: https://knttnk.github.io/homepage/index-en.html
+    - family-names: Minami
+      given-names: Yuki
+      website: https://y373.sakura.ne.jp/minami/
+    - family-names: Ishikawa
+      given-names: Masato
+      website: https://ishikawa-lab.notion.site/1b0ebbb4c9a48057bf82ccfc9d539ac5
+  title: "NQLib: A Python library for noise-shaping quantizer synthesis"
+  abstract: "Quantizers play an important role in discrete-valued input control. This study aims to develop a practical dynamic quantizer design toolbox in Python. This paper first provides some background on dynamic quantizers. Next, an overview of dynamic quantizers, mathematics, and various design methods are described. Then, the developed tool NQLib is described in detail. Furthermore, an example of designing a dynamic quantizer using NQLib is presented. Finally, the impact of NQLib is described."
+  doi: 10.1016/j.softx.2024.101792
+  issn: 2352-7110
+  journal: SoftwareX
+  keywords:
+    - "Discrete-valued input control"
+    - "Dynamic quantizers"
+    - "Optimal design"
+    - "Python"
+  year: 2024
+  month: 9
+  pages: 101792
+  volume: 27
+  url: https://www.sciencedirect.com/science/article/pii/S2352711024001638
+title: NQLib
+abstract: NQLib is a Python library to design noise shaping quantizer for discrete-valued input control.
+type: software
+authors:
+  - family-names: Tanaka
+    given-names: Kenta
+    orcid: https://orcid.org/0000-0003-4077-4679
+    website: https://knttnk.github.io/homepage/index-en.html
+  - family-names: Minami
+    given-names: Yuki
+    website: https://y373.sakura.ne.jp/minami/
+  - family-names: Ishikawa
+    given-names: Masato
+    website: https://ishikawa-lab.notion.site/1b0ebbb4c9a48057bf82ccfc9d539ac5
+keywords:
+  - "Discrete-valued input control"
+  - "Dynamic quantizers"
+  - "Optimal design"
+  - "Python"
+license: MIT
+repository: https://github.com/knttnk/NQLib
+url: https://pypi.org/project/nqlib/

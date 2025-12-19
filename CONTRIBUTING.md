@@ -95,33 +95,22 @@ This instructions assume you have already installed Conda and set up your enviro
 
 ```sh
 # packages
+conda create -n nqlib-update python -y
+conda activate nqlib-update
 conda install conda-build
 conda install -c conda-forge grayskull
 # create a working directory
-mkdir conda-recipe
-cd conda-recipe
+mkdir ../conda-recipe
+cd ../conda-recipe
 # create a recipe
 grayskull pypi nqlib
-git clone https://github.com/knttnk/staged-recipes.git
+git clone https://github.com/knttnk/nqlib-feedstock
+cd nqlib-feedstock
 git checkout -b nqlib
-# copy conda-release/nqlib/meta.yaml to staged-recipes/nqlib/recipes
-cp ../conda-release/nqlib/meta.yaml staged-recipes/nqlib/recipes/
-```
-
-Then, change the `meta.yaml` file as follows:
-
-```yaml
-...
-license_file: LICENSE.txt
-...
-```
-<!-- 
-# conda-release/nqlib/meta.yaml を staged-recipes/nqlib/recipes に
-# meta.yaml の license_file を LICENSE.txt に変え，nqlibのそれをmeta.yamlの隣にコピー
-# 移動したあと下を実行
+cp ../nqlib/meta.yaml recipe/meta.yaml
 git add .
 git commit -m "restored the example and added LICENSE.txt"
 git push origin nqlib  # originの後ろは、新しく作成したブランチ名
--->
+```
 
-TODO: Confirm publishing process
+Then, open a pull request to the [nqlib-feedstock](https://github.com/knttnk/nqlib-feedstock) repository.
